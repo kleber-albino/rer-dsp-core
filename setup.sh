@@ -64,6 +64,8 @@ if [ "$SETUP_MODE" = "demo" ]; then
   start_geoserver_exhibition "populate" ""
   start_geoserver_download "populate"
 
+  clear_object_storage_env_for_demo
+
   ok "Setup finished — demonstration data is ready on Docker volumes."
   echo ""
   echo "Next: start the application stacks with:"
@@ -160,6 +162,8 @@ else
   start_geoserver_exhibition "start" "$MIGRATION_CONFIG"
   start_geoserver_download "start"
 fi
+
+ensure_object_storage_stack
 
 if [ "$WILL_MIGRATE" = "true" ]; then
   ok "Setup finished — data is ready on Docker volumes."

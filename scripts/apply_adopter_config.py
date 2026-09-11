@@ -62,11 +62,11 @@ AOI_CANONICAL_TARGET_COLUMNS = (
 # Defaults of environment.object_storage, used when the block is absent from an
 # adopter-config.yaml written before the pre-generation feature existed.
 OBJECT_STORAGE_DEFAULTS = {
-    "endpoint": "",
+    "endpoint": "http://dsp-object-storage:8333",
     "region": "us-east-1",
     "bucket": "dsp-geo-files",
-    "access_key": "",
-    "secret_key": "",
+    "access_key": "dsp",
+    "secret_key": "dsp-secret",
     "path_style_access": True,
     "generation_cron": "0 2 * * *",
 }
@@ -2450,52 +2450,15 @@ def wizard(example: Path, active: Path, *, edit: bool = False, root: Path | None
 
 
 def ask_object_storage(config: dict[str, Any]) -> None:
-    """Collects the object storage credentials for the pre-generated download files.
-
-    The whole block is optional: without an endpoint the pre-generation job stays off and
-    downloads keep going straight to the WFS, which is the behaviour before this feature.
-    """
+    """Configures the SeaweedFS object storage bundled in rer-dsp-core for pre-generated downloads."""
     storage = config["environment"].setdefault(
         "object_storage", copy.deepcopy(OBJECT_STORAGE_DEFAULTS)
     )
-    print("\nObject storage for pre-generated download files (optional)")
-    print("  Leave the endpoint empty to keep serving downloads from the WFS only.")
-    storage["endpoint"] = ask_optional_field(
-        "Object storage endpoint (S3 API)",
-        storage.get("endpoint") or "",
-        "Address of the S3-compatible API. Empty disables the pre-generation job.",
-        "the geo file generation job and the backend",
-    ) or ""
-    if not storage["endpoint"]:
-        print("  Pre-generation disabled: downloads keep using the WFS.")
-        return
-    storage["bucket"] = ask_field(
-        "Bucket", storage.get("bucket") or OBJECT_STORAGE_DEFAULTS["bucket"],
-        "Bucket where the files are published. It must already exist — the job never creates it.",
-        "the geo file generation job and the backend",
-    )
-    storage["region"] = ask_field(
-        "Region", storage.get("region") or OBJECT_STORAGE_DEFAULTS["region"],
-        "Region reported to the S3 API. Endpoints that ignore it accept any value.",
-        "the geo file generation job and the backend",
-    )
-    storage["access_key"] = ask_field(
-        "Access key", storage.get("access_key") or "",
-        "Credential with write access for the job and read access for the backend.",
-        "the geo file generation job, the backend and .env",
-    )
-    storage["secret_key"] = ask_field(
-        "Secret key", storage.get("secret_key") or "",
-        "Secret paired with the access key.",
-        "the geo file generation job, the backend and .env",
-    )
-    storage["path_style_access"] = ask_bool_field(
-        "Path-style access",
-        bool(storage.get("path_style_access", True)),
-        "Keeps the bucket in the path instead of the host name. Endpoints that are not "
-        "AWS usually need it on.",
-        "the S3 client of the job and the backend",
-    )
+    print("\nObject storage (SeaweedFS) for pre-generated download files")
+    print("  The DSP ships dsp-object-storage in the core stack (real adopter installs).")
+    print(f"  Endpoint: {OBJECT_STORAGE_DEFAULTS['endpoint']}")
+    print(f"  Bucket: {OBJECT_STORAGE_DEFAULTS['bucket']} (created on startup if missing)")
+    storage.update(copy.deepcopy(OBJECT_STORAGE_DEFAULTS))
     while True:
         cron = ask_field(
             "Pre-generation cron",
@@ -2732,10 +2695,14 @@ def object_storage_settings(values: dict[str, Any]) -> dict[str, Any]:
             "(minute hour day month weekday)."
         )
     settings["generation_cron"] = cron
-    if settings["endpoint"] and not (settings["access_key"] and settings["secret_key"]):
+    if not settings["endpoint"]:
         raise ValueError(
-            "environment.object_storage needs access_key and secret_key when endpoint is set. "
-            "Clear the endpoint to keep downloads on the WFS only."
+            "environment.object_storage.endpoint is required for adopter installs "
+            "(use the bundled SeaweedFS endpoint)."
+        )
+    if not (settings["access_key"] and settings["secret_key"]):
+        raise ValueError(
+            "environment.object_storage needs access_key and secret_key."
         )
     return settings
 
@@ -2779,9 +2746,7 @@ def write_geo_file_generation_config(root: Path, values: dict[str, Any]) -> dict
             "path-style-access": storage["path_style_access"],
         }
     )
-    # No endpoint means no storage to publish to: the job runs and does nothing, which
-    # is noisier than not running it.
-    document["execution-jobs"]["geo-file-generation-job"] = bool(storage["endpoint"])
+    document["execution-jobs"]["geo-file-generation-job"] = True
     output = root / "config/Job-Geo-File-Generation/application/application.yaml"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(dump_yaml(document), encoding="utf-8")

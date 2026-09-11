@@ -50,12 +50,12 @@ dsp:
     # Same catalogue the backend reads: themes and the formats to pre-generate.
     themes-file: "file:/config/downloadThemesConfig.json"
   object-storage:
-    # Filled in by ./config.sh. Empty endpoint disables the job.
-    endpoint: ""
+    # Filled in by ./config.sh (bundled SeaweedFS for adopter real installs).
+    endpoint: "http://dsp-object-storage:8333"
     region: "us-east-1"
     bucket: "dsp-geo-files"
-    access-key: ""
-    secret-key: ""
+    access-key: "dsp"
+    secret-key: "dsp-secret"
     path-style-access: true
 
 geo-file-generation:
@@ -64,7 +64,7 @@ geo-file-generation:
   orphan-cleanup-enabled: true
 
 execution-jobs:
-  geo-file-generation-job: false
+  geo-file-generation-job: true
 
 logging:
   level:

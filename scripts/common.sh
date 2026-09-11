@@ -1249,39 +1249,92 @@ ensure_migration_service_if_needed() {
   start_migration_service_stack
 }
 
-# The endpoint is the switch: without a place to publish to, the job has nothing to do
-# and downloads keep coming from the WFS.
+# Brazil demo (quickstart) does not run SeaweedFS nor the geo-file job.
+is_object_storage_stack_enabled() {
+  ! is_quickstart_configured
+}
+
 is_geo_file_generation_enabled() {
-  [ -n "${DSP_OBJECT_STORAGE_ENDPOINT:-}" ]
+  is_object_storage_stack_enabled
+}
+
+compose_profile_args() {
+  COMPOSE_PROFILE_ARGS=(--profile migration)
+  if is_object_storage_stack_enabled; then
+    COMPOSE_PROFILE_ARGS+=(--profile object-storage)
+  fi
+}
+
+clear_object_storage_env_for_demo() {
+  set_env_var "DSP_OBJECT_STORAGE_ENDPOINT" ""
+  set_env_var "DSP_OBJECT_STORAGE_ACCESS_KEY" ""
+  set_env_var "DSP_OBJECT_STORAGE_SECRET_KEY" ""
+}
+
+wait_for_object_storage_health() {
+  info "Waiting for dsp-object-storage (SeaweedFS S3 API)..."
+  local attempt=0
+  local health=""
+
+  while [ "$attempt" -lt 60 ]; do
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' dsp-object-storage 2>/dev/null || echo missing)"
+    case "$health" in
+      healthy)
+        ok "dsp-object-storage ready"
+        return 0
+        ;;
+      unhealthy)
+        error "dsp-object-storage is unhealthy."
+        docker compose --env-file .env --profile object-storage logs --tail 40 dsp-object-storage || true
+        return 1
+        ;;
+    esac
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  error "dsp-object-storage did not become healthy in time."
+  docker compose --env-file .env --profile object-storage logs --tail 40 dsp-object-storage || true
+  return 1
+}
+
+start_object_storage_service() {
+  info "Starting object storage (SeaweedFS, profile=object-storage)..."
+  docker compose --env-file .env --profile object-storage up -d --build dsp-object-storage
+  wait_for_object_storage_health
 }
 
 start_geo_file_generation_service() {
-  info "Starting geo file generation service (profile=geo-file)..."
+  info "Starting geo file generation service (profile=object-storage)..."
   wait_for_geo_file_generation_schema
-  docker compose --env-file .env --profile geo-file up -d --build dsp-job-geo-file-generation
+  docker compose --env-file .env --profile object-storage up -d --build dsp-job-geo-file-generation
   ok "Geo file generation service ready (cron=${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *})"
 }
 
-ensure_geo_file_generation_service_if_needed() {
-  if ! is_geo_file_generation_enabled; then
+ensure_object_storage_stack() {
+  if ! is_object_storage_stack_enabled; then
     return 0
   fi
   ensure_dsp_repositories --geo-file-job
+  start_object_storage_service
   start_geo_file_generation_service
+}
+
+ensure_geo_file_generation_service_if_needed() {
+  ensure_object_storage_stack
 }
 
 print_geo_file_generation_hints() {
   if ! is_geo_file_generation_enabled; then
     echo ""
-    echo "Pre-generated download files: disabled (downloads served by the WFS)."
-    echo "Run ./config.sh and fill in the object storage endpoint to enable them."
+    echo "Pre-generated download files: disabled (Brazil demo — downloads served by the WFS)."
     return 0
   fi
   echo ""
   echo "Pre-generated download files: bucket ${DSP_OBJECT_STORAGE_BUCKET:-dsp-geo-files}" \
-    "at ${DSP_OBJECT_STORAGE_ENDPOINT} (cron=${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *})"
+    "at ${DSP_OBJECT_STORAGE_ENDPOINT:-http://dsp-object-storage:8333} (cron=${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *})"
   echo "Optional one-shot generation (in addition to the schedule):"
-  echo "  docker compose --env-file .env --profile geo-file run --rm -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation"
+  echo "  docker compose --env-file .env --profile object-storage run --rm -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation"
 }
 
 print_migration_resync_hints() {
@@ -1371,11 +1424,12 @@ is_stack_optional_service() {
 
 get_stack_runtime_services() {
   local svc
+  compose_profile_args
   while IFS= read -r svc; do
     [ -z "$svc" ] && continue
     [ "$svc" = "dsp-job-migration" ] && continue
     printf '%s\n' "$svc"
-  done < <(docker compose --env-file .env --profile migration config --services 2>/dev/null || true)
+  done < <(docker compose --env-file .env "${COMPOSE_PROFILE_ARGS[@]}" config --services 2>/dev/null || true)
 }
 
 compose_status_label() {
@@ -1448,6 +1502,14 @@ print_stack_service_status() {
   echo ""
 }
 
+stack_required_services() {
+  local -a services=("${STACK_REQUIRED_SERVICES[@]}")
+  if is_object_storage_stack_enabled; then
+    services+=(dsp-object-storage dsp-job-geo-file-generation)
+  fi
+  printf '%s\n' "${services[@]}"
+}
+
 print_stack_summary() {
   local svc status
   local required_total=0
@@ -1457,7 +1519,8 @@ print_stack_summary() {
 
   load_stack_service_statuses
 
-  for svc in "${STACK_REQUIRED_SERVICES[@]}"; do
+  while IFS= read -r svc; do
+    [ -z "$svc" ] && continue
     required_total=$((required_total + 1))
     status="$(stack_service_status "$svc")"
     if is_stack_service_up "$svc"; then
@@ -1467,7 +1530,7 @@ print_stack_summary() {
         UNHEALTHY|STARTING) has_caveat=true ;;
       esac
     fi
-  done
+  done < <(stack_required_services)
 
   while IFS= read -r svc; do
     [ -z "$svc" ] && continue
@@ -1502,7 +1565,8 @@ print_stack_url_line() {
 
 # Tear down compose services, including the migration profile (job DB + migration job).
 compose_down_project() {
-  docker compose --env-file .env --profile migration down "$@"
+  compose_profile_args
+  docker compose --env-file .env "${COMPOSE_PROFILE_ARGS[@]}" down "$@"
 }
 
 # Status of this project's compose services + URLs; optional project cleanup; then exit.
