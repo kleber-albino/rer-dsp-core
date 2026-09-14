@@ -2249,6 +2249,13 @@ def ask_generic_layer_entry(
                 entry[field] = value
                 break
             print("\n  Enter the source column name.")
+        if field == "geometry_column":
+            entry["srid"] = ask_int_field(
+                "Layer SRID", entry.get("srid", 4326),
+                "Coordinate reference system identifier of the source geometry.",
+                "ETL geometry conversion and GeoServer layers",
+                minimum=1,
+            )
 
     entry["additional_columns"] = ask_layer_additional_columns(entry)
     entry["where_clause"] = ask_field(
@@ -2272,13 +2279,6 @@ def ask_generic_layer_entry(
             break
         except ValueError as exc:
             print(f"\n  {exc}")
-
-    entry["srid"] = ask_int_field(
-        "Layer SRID", entry.get("srid", 4326),
-        "Coordinate reference system identifier of the source geometry.",
-        "ETL geometry conversion and GeoServer layers",
-        minimum=1,
-    )
 
     entry["display_name"] = ask_field(
         "Display name", entry.get("display_name") or entry["layer_name"],
@@ -2483,10 +2483,10 @@ def wizard(example: Path, active: Path, *, edit: bool = False, root: Path | None
             (
                 "source_table",
                 "primary_key",
+                "territory_level_3_column",
                 "geometry_column",
                 "created_at_column",
                 "updated_at_column",
-                "territory_level_3_column",
             ),
         ),
     ):

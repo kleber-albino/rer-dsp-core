@@ -86,10 +86,10 @@ etl:
   area_of_interest:
     source_table: "<source_schema>.<source_table>"
     primary_key: "<source_pk>"
+    territory_level_3_column: "<source_territory_level_3_fk>"
     geometry_column: "<source_geom>"
     created_at_column: "<source_created_at>"
     updated_at_column: "<source_updated_at>"           # optional column
-    territory_level_3_column: "<source_territory_level_3_fk>"
     # Placeholder fixo: área calculada pelo job KPI (não migrada da origem).
     area_column: area
     additional_columns: []
@@ -108,12 +108,12 @@ etl:
   #       parent_key: "<source_parent_pk>"   # AOI FK (e.g. aeroporto_id)
   #       label_column: "<source_name>"                 # optional column
   #       geometry_column: "<source_geom>"
+  #       srid: 4326
   #       created_at_column: "<source_created_at>"
   #       updated_at_column: "<source_updated_at>"      # optional column
   #       additional_columns: []
-  #       layer_name: "<wms_id>"             # technical id; destination = dsp.<name>
-  #       srid: 4326
   #       where_clause: "1=1"
+  #       layer_name: "<wms_id>"             # technical id; destination = dsp.<name>
   #       display_name: "<ui_label>"         # human-readable map label
   #       group_key: "<group_key>"           # map.group_names key (or new key)
   #       active_default: false
