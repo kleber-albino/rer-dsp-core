@@ -3,7 +3,7 @@
 # This is the only file to edit in the advanced workflow.
 # DSP contract keys are kept by the core templates.
 # To fill in this file step by step, run: ./config.sh
-# Wizard order: 1 database, 2 tables/layers, 3 application, 4 interface.
+# Wizard order: 1 database, 2 tables/layers, 3 application, 4 interface, 5 KPI configuration.
 # Quote strings only when YAML requires it (special characters). Numbers, booleans and null are not quoted.
 
 environment:
@@ -11,7 +11,7 @@ environment:
   source_jdbc_url: "jdbc:postgresql://source-db-host:5433/source_db"
   source_db_user: "postgres"
   source_db_password: "postgres"
-  # SRID of the source geometry data.
+  # SRID of each entity's source geometry (wizard Stage 2, after geometry_column).
   layer_srs:
     territory_level_1: 4326
     territory_level_2: 4326
@@ -86,16 +86,12 @@ etl:
   area_of_interest:
     source_table: "<source_schema>.<source_table>"
     primary_key: "<source_pk>"
-    territory_level_3_column: "<source_territory_level_3_fk>"
     geometry_column: "<source_geom>"
     created_at_column: "<source_created_at>"
     updated_at_column: "<source_updated_at>"           # optional column
-    area_column: "<source_area>"
-    business_only_persist_columns:
-      - "theme_1"
-      - "theme_2"
-      - "theme_3"
-      - "theme_4"
+    territory_level_3_column: "<source_territory_level_3_fk>"
+    # Placeholder fixo: área calculada pelo job KPI (não migrada da origem).
+    area_column: area
     additional_columns: []
     where_clause: "1=1"
   
@@ -115,7 +111,7 @@ etl:
   #       created_at_column: "<source_created_at>"
   #       updated_at_column: "<source_updated_at>"      # optional column
   #       additional_columns: []
-  #       layer_name: "<wms_id>"             # technical id; destination = dsp.<name> 
+  #       layer_name: "<wms_id>"             # technical id; destination = dsp.<name>
   #       srid: 4326
   #       where_clause: "1=1"
   #       display_name: "<ui_label>"         # human-readable map label
@@ -145,36 +141,37 @@ etl:
 
 installation:
   kpis:
-    # Optional theme KPIs in the source database (0 to 4). AOI KPI always exists.
-    theme_count: 4
+    # Optional theme KPIs (0 to min(4, generic layers)). AOI KPI always exists.
+    # Configured in Stage 5 (KPI configuration) in ./config.sh.
+    theme_count: 0
     area_of_interest:
       label: "Registered properties"
       unit_of_measurement: "un."
-      optional_label: "ha"
+      optional_label: "m²"
       accent_color: "#d3e500"
     theme_1:
-      enabled: true
+      layer: null
       label: "Theme 1"
-      unit_of_measurement: "un."
+      unit_of_measurement: "m²"
       accent_color: "#cf95e5"
     theme_2:
-      enabled: true
+      layer: null
       label: "Theme 2"
-      unit_of_measurement: "un."
+      unit_of_measurement: "m²"
       accent_color: "#a698e5"
     theme_3:
-      enabled: true
+      layer: null
       label: "Theme 3"
-      unit_of_measurement: "un."
+      unit_of_measurement: "m²"
       accent_color: "#91c9e5"
     theme_4:
-      enabled: true
+      layer: null
       label: "Theme 4"
-      unit_of_measurement: "un."
+      unit_of_measurement: "m²"
       accent_color: "#8ce5b5"
   area:
-    unit: "ha"
-    unit_label: "ha"
+    unit: "m2"
+    unit_label: "m²"
   formats:
     date: "dd/MM/yyyy"
     date_time: "dd/MM/yyyy HH:mm"

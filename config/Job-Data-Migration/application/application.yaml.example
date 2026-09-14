@@ -131,21 +131,28 @@ batch:
       layer-name: "territory-level-3"
       srid: "${LAYER_SRS_TERRITORY_LEVEL_3:4326}"
   area-of-interest:
+    # Job creates dsp.area_of_interest on dsp-db and geo-target (canonical
+    # columns + optional extras). Canonical source columns map to fixed names:
+    #   primary-key → id
+    #   creation-date-column → registration_date
+    #   updated-at-column → updated_at
+    #   commune-id-column → territory_level_3_id
+    #   geometry-column → geom
+    # persist-columns: extras only (same name on both destinations).
+    # AOI area and theme KPI values are calculated by the KPI migration job
+    # (see kpis below), not read from source columns.
+    # Details-panel fields stay in installation-config.json, not in this YAML.
     source-table: "<source_schema>.<source_table>"
     target-table: "dsp.area_of_interest"
     primary-key: "<source_pk>"
     creation-date-column: "<source_created_at>"
     updated-at-column: "<source_updated_at>"
+    commune-id-column: "<source_territory_level_3_fk>"
     territory-level-3-column: "<source_territory_level_3_fk>"
     total-area-column: "<source_area>"
     geometry-column: "<source_geom>"
     where-clause: "1=1"
     additional-columns: []
-    business-only-persist-columns:
-      - "<source_theme_1>"
-      - "<source_theme_2>"
-      - "<source_theme_3>"
-      - "<source_theme_4>"
     layer-name: "area-of-interest"
     srid: "${LAYER_SRS_AREA_OF_INTEREST:4326}"
   # layers:
@@ -160,6 +167,19 @@ batch:
   #     srid: 4326
   #     where-clause: "1=1"
   layers: []
+
+# Theme KPI mappings: generated from installation.kpis in adopter-config.yaml.
+# Each theme links a generic layer (etl.layers[].layer_name) to a KPI slot.
+kpis:
+  theme-count: 0
+  area-unit-of-measurement: "m²"
+  themes: []
+  # Example (filled by ./config.sh):
+  # themes:
+  #   - slot: 1
+  #     layer-name: "consolidated_area"
+  #     unit-of-measurement: "ha"
+  #     label: "Consolidated area"
 
 parallelization:
   jobs:
@@ -194,6 +214,7 @@ execution-jobs:
   admin-unit-level-3-geoserver-job: true
   area-of-interest-geoserver-job: true
   layer-jobs: true
+  kpi-job: true
 
 logging:
   level:

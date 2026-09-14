@@ -41,17 +41,17 @@ dsp:
   download:
     themes-file: file:/config/downloadThemesConfig.json
   object-storage:
-    endpoint: http://192.168.31.195:9000
+    endpoint: ''
     region: us-east-1
     bucket: dsp-geo-files
-    access-key: rustfsadmin
-    secret-key: rustfsadmin
+    access-key: ''
+    secret-key: ''
     path-style-access: true
 geo-file-generation:
   chunk-size: 1
   orphan-cleanup-enabled: true
 execution-jobs:
-  geo-file-generation-job: true
+  geo-file-generation-job: false
 logging:
   level:
     br.car.dsp_geo_file: INFO
