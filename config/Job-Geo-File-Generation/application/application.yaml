@@ -41,11 +41,11 @@ dsp:
   download:
     themes-file: file:/config/downloadThemesConfig.json
   object-storage:
-    endpoint: ''
+    endpoint: http://dsp-object-storage:8333
     region: us-east-1
     bucket: dsp-geo-files
-    access-key: ''
-    secret-key: ''
+    access-key: dsp
+    secret-key: dsp-secret
     path-style-access: true
 geo-file-generation:
   chunk-size: 1

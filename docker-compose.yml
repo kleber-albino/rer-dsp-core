@@ -94,8 +94,41 @@ services:
     networks:
       - dsp_network
 
-  # Pre-generates the territorial download files. Its own profile and its own cron:
-  # the window has to open after the migration, which is what raises the flags.
+  # SeaweedFS (weed mini) — DSP S3 object storage. Profile object-storage: real adopter only.
+  dsp-object-storage:
+    image: dsp-object-storage:local
+    build:
+      context: ./config/ObjectStorage
+      dockerfile: docker/Dockerfile
+    container_name: dsp-object-storage
+    profiles:
+      - object-storage
+    restart: unless-stopped
+    ports:
+      - "${DSP_OBJECT_STORAGE_HOST_PORT:-8333}:8333"
+    expose:
+      - "8333"
+    environment:
+      DSP_OBJECT_STORAGE_BUCKET: ${DSP_OBJECT_STORAGE_BUCKET:-dsp-geo-files}
+      DSP_OBJECT_STORAGE_ACCESS_KEY: ${DSP_OBJECT_STORAGE_ACCESS_KEY:-dsp}
+      DSP_OBJECT_STORAGE_SECRET_KEY: ${DSP_OBJECT_STORAGE_SECRET_KEY:-dsp-secret}
+      DSP_OBJECT_STORAGE_REGION: ${DSP_OBJECT_STORAGE_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${DSP_OBJECT_STORAGE_ACCESS_KEY:-dsp}
+      AWS_SECRET_ACCESS_KEY: ${DSP_OBJECT_STORAGE_SECRET_KEY:-dsp-secret}
+      AWS_DEFAULT_REGION: ${DSP_OBJECT_STORAGE_REGION:-us-east-1}
+    volumes:
+      - dsp_object_storage_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "aws --endpoint-url http://127.0.0.1:8333 s3 ls >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - dsp_network
+
+  # Pre-generates the territorial download files. Profile object-storage (real adopter).
+  # Cron window opens after migration, which is what raises the flags.
   dsp-job-geo-file-generation:
     image: dsp-job-geo-file-generation:local
     build:
@@ -106,7 +139,7 @@ services:
       network: host
     container_name: dsp-job-geo-file-generation
     profiles:
-      - geo-file
+      - object-storage
     restart: unless-stopped
     environment:
       SPRING_CONFIG_LOCATION: file:/config/application.yaml
@@ -119,6 +152,8 @@ services:
       dsp-db:
         condition: service_healthy
       dsp-geoserver-db:
+        condition: service_healthy
+      dsp-object-storage:
         condition: service_healthy
     networks:
       - dsp_network
@@ -146,7 +181,7 @@ services:
       DSP_ABOUT_CONFIG_FILE: ${DSP_ABOUT_CONFIG_FILE:-file:/config/about/about-config.json}
       DSP_ABOUT_CONTENT_DIR: ${DSP_ABOUT_CONTENT_DIR:-file:/config/about/}
       DSP_GEOSERVER_WFS_BASE_URL: ${DSP_GEOSERVER_WFS_BASE_URL:-http://dsp-geoserver-download:8080/geoserver/dsp/wfs}
-      # Same bucket the pre-generation job writes to. Empty endpoint = WFS only.
+      # Same bucket the pre-generation job writes to. Empty endpoint = WFS only (Brazil demo).
       DSP_OBJECT_STORAGE_ENDPOINT: ${DSP_OBJECT_STORAGE_ENDPOINT:-}
       DSP_OBJECT_STORAGE_REGION: ${DSP_OBJECT_STORAGE_REGION:-us-east-1}
       DSP_OBJECT_STORAGE_BUCKET: ${DSP_OBJECT_STORAGE_BUCKET:-dsp-geo-files}
@@ -318,4 +353,5 @@ volumes:
   dsp_geoserver_db_data:
   dsp_geoserver_exhibition_data:
   dsp_geoserver_download_data:
+  dsp_object_storage_data:
   dsp_gateway_cache:
