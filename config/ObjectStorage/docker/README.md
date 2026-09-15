@@ -18,8 +18,7 @@
 
 ## Capacity
 
-- `-master.volumeSizeLimitMB=30000` sets the size of **each internal volume file** (~30 GB), not a total quota.
-- `weed mini` auto-configures the volume count from free disk space (no extra flag needed).
+- `weed mini` auto-configures the per-volume size limit and volume count from free disk space (no extra flags in the DSP image).
 - Total capacity depends on free space on the Docker volume `dsp_object_storage_data`.
 
 ## Host port

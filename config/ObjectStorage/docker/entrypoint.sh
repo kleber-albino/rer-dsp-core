@@ -23,10 +23,13 @@ export AWS_ACCESS_KEY_ID="$ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="$SECRET_KEY"
 export AWS_DEFAULT_REGION="$REGION"
 
+if [ -f /data/mini.options ]; then
+  sed -i '/^master\.volumeSizeLimitMB=/d' /data/mini.options
+fi
+
 /usr/bin/weed -logtostderr=true mini \
   -dir=/data \
   -ip.bind=0.0.0.0 \
-  -master.volumeSizeLimitMB=30000 \
   -s3.config=/etc/seaweedfs/s3.json &
 
 weed_pid=$!
