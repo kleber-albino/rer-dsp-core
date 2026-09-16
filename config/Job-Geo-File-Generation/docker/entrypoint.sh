@@ -1,6 +1,6 @@
 #!/bin/sh
 # Geo file pre-generation job entrypoint — DSP_GEO_FILE_GENERATION_EXECUTION_MODE:
-#   once                 — java -jar and exit (compose run without --rm; logs via docker logs)
+#   once                 — java -jar and exit (compose up on dsp-job-geo-file-generation in ./setup.sh)
 #   continuous           — supercronic on DSP_GEO_FILE_GENERATION_CRON
 #   wait-for-first-load  — poll DSP_FIRST_DATA_LOAD_MARKER, then run once and exit
 set -e

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Migration job entrypoint — DSP_MIGRATION_EXECUTION_MODE:
-#   once            — java -jar and exit (compose run without --rm; logs via docker logs)
+#   once            — java -jar and exit (compose up on dsp-job-migration in ./setup.sh; docker logs dsp-job-migration)
 #   continuous      — optional wait until DSP_MIGRATION_SCHEDULED_AT (Schedule for later),
 #                     one first load, then supercronic on DSP_MIGRATION_CRON
 #   scheduled-once  — wait until DSP_MIGRATION_SCHEDULED_AT, run once, exit
