@@ -51,7 +51,7 @@ geo-file-generation:
   chunk-size: 1
   orphan-cleanup-enabled: true
 execution-jobs:
-  geo-file-generation-job: false
+  geo-file-generation-job: true
 logging:
   level:
     br.car.dsp_geo_file: INFO

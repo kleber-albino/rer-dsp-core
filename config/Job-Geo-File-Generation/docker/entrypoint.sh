@@ -1,7 +1,8 @@
 #!/bin/sh
 # Geo file pre-generation job entrypoint — DSP_GEO_FILE_GENERATION_EXECUTION_MODE:
-#   once        — java -jar and exit (compose run --rm)
-#   continuous  — supercronic on DSP_GEO_FILE_GENERATION_CRON, in a window after the migration
+#   once                 — java -jar and exit (compose run without --rm; logs via docker logs)
+#   continuous           — supercronic on DSP_GEO_FILE_GENERATION_CRON
+#   wait-for-first-load  — poll DSP_FIRST_DATA_LOAD_MARKER, then run once and exit
 set -e
 
 MODE="${DSP_GEO_FILE_GENERATION_EXECUTION_MODE:-continuous}"
@@ -65,8 +66,27 @@ EOF
     exec supercronic /tmp/dsp-geo-file.crontab
     ;;
 
+  wait-for-first-load)
+    MARKER="${DSP_FIRST_DATA_LOAD_MARKER:-/dsp-batch-markers/first_data_load.ready}"
+    echo "[entrypoint] wait-for-first-load: download pre-generation is paused until the migration job finishes."
+    echo "[entrypoint] after migration, this container will build pre-generated files once, then exit."
+    echo "[entrypoint] polling every 30s for marker: ${MARKER}"
+    polls=0
+    while [ ! -f "$MARKER" ]; do
+      polls=$((polls + 1))
+      if [ "$polls" -ge 10 ]; then
+        echo "[entrypoint] still waiting — migration has not completed yet (no marker at ${MARKER})"
+        polls=0
+      fi
+      sleep 30
+    done
+    echo "[entrypoint] migration complete (marker present) — starting one pre-generation cycle"
+    # shellcheck disable=SC2086
+    exec $JAVA_BIN
+    ;;
+
   *)
-    echo "[entrypoint] Invalid DSP_GEO_FILE_GENERATION_EXECUTION_MODE: '${MODE}' (once|continuous)" >&2
+    echo "[entrypoint] Invalid DSP_GEO_FILE_GENERATION_EXECUTION_MODE: '${MODE}' (once|continuous|wait-for-first-load)" >&2
     exit 1
     ;;
 esac

@@ -12,13 +12,13 @@ The `dsp-job-migration` service uses Compose profile `migration`. Batch metadata
 
 | `DSP_MIGRATION_EXECUTION_MODE` | Behaviour |
 | --- | --- |
-| `once` (default) | Runs `java -jar /app/app.jar` and exits — used by `compose run --rm` and setup Run now + One-time |
+| `once` (default) | Runs `java -jar /app/app.jar` and exits — used by `compose run` (container stays **Exited**; `docker logs <name>`) and setup Run now + One-time |
 | `continuous` | If `DSP_MIGRATION_SCHEDULED_AT` is set (Schedule for later), waits, runs one first load, publishes both GeoServers, then `supercronic` on `DSP_MIGRATION_CRON`. Run now + Continuous has no wait (first load and populate already ran in setup). |
 | `scheduled-once` | Waits until `DSP_MIGRATION_SCHEDULED_AT`, runs once, publishes both GeoServers, exits (Schedule for later + One-time) |
 
 | Variable | Notes |
 | --- | --- |
-| `DSP_MIGRATION_CRON` | 5-field cron (e.g. `0 22 * * *`). `continuous` only. |
+| `DSP_MIGRATION_CRON` | 5-field cron (e.g. `0 22 * * *`) written by `./setup.sh` Job 1/2 (every day / N hours / N minutes). `continuous` only. |
 | `DSP_MIGRATION_SCHEDULED_AT` | `YYYY-MM-DD HH:MM:SS`. Required for `scheduled-once`; optional first load for `continuous` (Schedule for later). |
 | `DSP_MIGRATION_TZ` | IANA timezone for wall clock. Read from `.env` (see `.env.example`). |
 
@@ -31,9 +31,11 @@ Scheduled first load: [`publish_geoservers.sh`](publish_geoservers.sh) runs the 
 **One-time now** (`once`):
 
 ```bash
-docker compose --env-file .env --profile migration run --rm --build \
+docker compose --env-file .env --profile migration run --build \
   -e DSP_MIGRATION_EXECUTION_MODE=once dsp-job-migration
 ```
+
+One-off containers are not removed automatically; inspect logs with `docker logs` on the `…_run_<id>` name from `docker ps -a`.
 
 **Scheduled service** (`continuous` or `scheduled-once`):
 
@@ -44,8 +46,14 @@ docker compose --env-file .env --profile migration up -d --build dsp-job-migrati
 Optional extra one-shot on top of the schedule:
 
 ```bash
-docker compose --env-file .env --profile migration run --rm \
+docker compose --env-file .env --profile migration run \
   -e DSP_MIGRATION_EXECUTION_MODE=once dsp-job-migration
 ```
 
-The image copies `application.yaml`, `mapLayersConfig.json`, the entrypoint, `publish_geoservers.sh` and `populate_geoserver.sh` at build time.
+The image copies `application.yaml`, `mapLayersConfig.json`, the entrypoint, `publish_geoservers.sh`,
+`mark_first_data_load_ready.sh` and `populate_geoserver.sh` at build time (from `dsp_config` build context).
+
+## Related batch job
+
+Geo file pre-generation (`dsp-job-geo-file-generation`, profile `object-storage`) uses the same
+schedule menu in `./setup.sh` (Job 2/2). See [`../Job-Geo-File-Generation/docker/README.md`](../../Job-Geo-File-Generation/docker/README.md).

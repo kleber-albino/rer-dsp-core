@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
 
 DSP_ORCHESTRATION_SCRIPT="setup.sh"
-TOTAL_STEPS=10
+TOTAL_STEPS=11
 
 # shellcheck disable=SC1091
 source "$ROOT_DIR/scripts/common.sh"
@@ -37,6 +37,9 @@ elif [ "$WILL_MIGRATE" = "true" ]; then
   info "Mode: real adopter — first migration runs during setup (${MIGRATION_EXECUTION_MODE:-once})"
 else
   info "Mode: real adopter — first migration scheduled (${MIGRATION_EXECUTION_MODE})"
+  if [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
+    info "After the migration job runs, pre-generated download files will be built once automatically."
+  fi
 fi
 
 MIGRATION_CONFIG_EXAMPLE="$ROOT_DIR/config/Job-Data-Migration/application/application.yaml.example"
@@ -142,11 +145,14 @@ if [ "$WILL_MIGRATE" = "true" ]; then
   ok "Initial migration finished"
 fi
 
-persist_migration_env
+persist_batch_jobs_env
 
 if [ "$KEEP_MIGRATION_SERVICE" = "true" ]; then
   if [ "$WILL_MIGRATE" != "true" ]; then
-    info "First load is scheduled — not running the job during this setup."
+    info "First load is scheduled — not running the migration during this setup."
+    if [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
+      info "Download files are not generated yet; the geo file job will run once after the scheduled migration."
+    fi
   fi
   start_migration_service_stack
   ok "Migration service stack is running (${MIGRATION_EXECUTION_MODE}${MIGRATION_CRON:+ cron=${MIGRATION_CRON}}${MIGRATION_SCHEDULED_AT:+ at=${MIGRATION_SCHEDULED_AT}})"
@@ -158,17 +164,19 @@ if [ "$WILL_MIGRATE" = "true" ]; then
   start_geoserver_exhibition "populate" "$MIGRATION_CONFIG"
   start_geoserver_download "populate"
 else
-  info "Starting GeoServers now; layers are published after the first scheduled migration."
+  info "Starting GeoServers now; layers are published after the scheduled migration job completes."
   start_geoserver_exhibition "start" "$MIGRATION_CONFIG"
   start_geoserver_download "start"
 fi
 
-ensure_object_storage_stack
+step_header 11 "Object storage + pre-generated downloads"
+
+ensure_geo_file_generation_after_setup
 
 if [ "$WILL_MIGRATE" = "true" ]; then
   ok "Setup finished — data is ready on Docker volumes."
 else
-  ok "Setup finished — databases stay empty until the scheduled first load."
+  ok "Setup finished — databases stay empty until the scheduled migration; then layers and download files are generated."
 fi
 echo ""
 echo "Next: start the application stacks with:"

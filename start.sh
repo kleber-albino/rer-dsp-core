@@ -47,7 +47,7 @@ if is_quickstart_configured; then
   use_quickstart_layer_srids
 fi
 
-step_header 6 "Confirmation"
+step_header 6 "Summary"
 
 if is_persistent_migration_mode; then
   info "Migration service will stay running (mode=$(get_migration_execution_mode))."
@@ -56,15 +56,13 @@ if is_persistent_migration_mode; then
   fi
   if [ -n "${DSP_MIGRATION_SCHEDULED_AT:-}" ]; then
     info "First load at: ${DSP_MIGRATION_SCHEDULED_AT} (tz=${DSP_MIGRATION_TZ})"
+    if is_geo_wait_for_first_load_mode && is_object_storage_stack_enabled; then
+      info "Pre-generated download files will be built once after that migration job finishes."
+    fi
   fi
 else
   info "This script starts the application stack only (no data migration)."
-fi
-info "To migrate/populate data, run ./setup.sh first (uses Docker volumes)."
-
-if ! prompt_yes_no "Do you want to continue?"; then
-  info "Startup cancelled."
-  exit 0
+  info "To migrate/populate data, run ./setup.sh first (uses Docker volumes)."
 fi
 
 step_header 7 "Databases"
