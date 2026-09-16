@@ -78,3 +78,12 @@ run_populate "GeoServer Download" "$DOWNLOAD_URL" \
 
 touch "$MARKER"
 echo "[publish-geoservers] Exhibition and Download layers published"
+
+if [ -f /mark_first_data_load_ready.sh ]; then
+  sh /mark_first_data_load_ready.sh
+else
+  first_marker="${DSP_FIRST_DATA_LOAD_MARKER:-/dsp-batch-markers/first_data_load.ready}"
+  mkdir -p "$(dirname "$first_marker")"
+  touch "$first_marker"
+  echo "[mark-first-data-load] ready: ${first_marker}"
+fi

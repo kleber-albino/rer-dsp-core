@@ -3123,6 +3123,10 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
         aoi_values.get("updated_at_column"),
         "etl.area_of_interest.updated_at_column",
     )
+    territory_level_3_column = require_non_blank_column(
+        aoi_values.get("territory_level_3_column"),
+        "etl.area_of_interest.territory_level_3_column",
+    )
     aoi.update(
         {
             "source-table": aoi_values["source_table"],
@@ -3133,10 +3137,8 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
                 aoi_values.get("created_at_column"),
                 "etl.area_of_interest.created_at_column",
             ),
-            "territory-level-3-column": require_non_blank_column(
-                aoi_values.get("territory_level_3_column"),
-                "etl.area_of_interest.territory_level_3_column",
-            ),
+            "commune-id-column": territory_level_3_column,
+            "territory-level-3-column": territory_level_3_column,
             "geometry-column": require_non_blank_column(
                 aoi_values.get("geometry_column"),
                 "etl.area_of_interest.geometry_column",

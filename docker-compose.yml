@@ -84,6 +84,10 @@ services:
       DSP_GEOSERVER_DB_USER: ${DSP_GEOSERVER_DB_USER:-dsp_geo}
       DSP_GEOSERVER_DB_PASSWORD: ${DSP_GEOSERVER_DB_PASSWORD:-dsp_geo}
       MAP_LAYERS_CONFIG: /config/mapLayersConfig.json
+      DSP_FIRST_DATA_LOAD_MARKER: ${DSP_FIRST_DATA_LOAD_MARKER:-/dsp-batch-markers/first_data_load.ready}
+      DSP_GEO_FILE_GENERATION_RECURRING: ${DSP_GEO_FILE_GENERATION_RECURRING:-true}
+    volumes:
+      - dsp_batch_markers:/dsp-batch-markers
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -140,7 +144,7 @@ services:
     container_name: dsp-job-geo-file-generation
     profiles:
       - object-storage
-    restart: unless-stopped
+    restart: ${DSP_GEO_FILE_GENERATION_RESTART_POLICY:-unless-stopped}
     environment:
       SPRING_CONFIG_LOCATION: file:/config/application.yaml
       SPRING_MAIN_WEB_APPLICATION_TYPE: none
@@ -148,6 +152,10 @@ services:
       DSP_GEO_FILE_GENERATION_CRON: "${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *}"
       DSP_GEO_FILE_GENERATION_TZ: ${DSP_GEO_FILE_GENERATION_TZ:-${DSP_MIGRATION_TZ}}
       TZ: ${DSP_GEO_FILE_GENERATION_TZ:-${DSP_MIGRATION_TZ}}
+      DSP_FIRST_DATA_LOAD_MARKER: ${DSP_FIRST_DATA_LOAD_MARKER:-/dsp-batch-markers/first_data_load.ready}
+      DSP_GEO_FILE_GENERATION_RECURRING: ${DSP_GEO_FILE_GENERATION_RECURRING:-true}
+    volumes:
+      - dsp_batch_markers:/dsp-batch-markers
     depends_on:
       dsp-db:
         condition: service_healthy
@@ -354,4 +362,5 @@ volumes:
   dsp_geoserver_exhibition_data:
   dsp_geoserver_download_data:
   dsp_object_storage_data:
+  dsp_batch_markers:
   dsp_gateway_cache:

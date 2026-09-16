@@ -662,6 +662,11 @@ print_migration_preview() {
   if [ -n "${MIGRATION_CRON:-}" ]; then
     echo "  Cron: ${MIGRATION_CRON} (tz=${DSP_MIGRATION_TZ})"
   fi
+  if [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
+    echo "  Pre-generated downloads: once, automatically after the migration job completes"
+  elif [ "${GEO_FILE_GENERATION_RECURRING:-true}" = "true" ] && [ -n "${GEO_FILE_GENERATION_CRON:-}" ]; then
+    echo "  Pre-generated downloads: recurring (cron=${GEO_FILE_GENERATION_CRON})"
+  fi
   echo "  Datasources:"
   echo "    batch:  ${batch_url:-<missing>} (user: ${batch_user:-<missing>})"
   echo "    source: ${source_url:-<missing>} (user: ${source_user:-<missing>})"
@@ -1208,17 +1213,67 @@ migration_scheduled_once_completed() {
   [ "$state" = "exited" ] && [ "$code" = "0" ]
 }
 
-persist_migration_env() {
+# Persists batch job schedule and mode from ./setup.sh into .env.
+persist_batch_jobs_env() {
+  local geo_recurring="${GEO_FILE_GENERATION_RECURRING:-true}"
+  local geo_mode="once"
+  local geo_restart="no"
+
   set_env_var "DSP_MIGRATION_EXECUTION_MODE" "${MIGRATION_EXECUTION_MODE:-once}"
   set_env_var "DSP_MIGRATION_TZ" "${DSP_MIGRATION_TZ}"
   set_env_var "DSP_MIGRATION_CRON" "${MIGRATION_CRON:-}"
   set_env_var "DSP_MIGRATION_SCHEDULED_AT" "${MIGRATION_SCHEDULED_AT:-}"
+  set_env_var "DSP_GEO_FILE_GENERATION_RECURRING" "$geo_recurring"
+
+  if [ "$geo_recurring" = "true" ]; then
+    geo_mode="continuous"
+    geo_restart="unless-stopped"
+    set_env_var "DSP_GEO_FILE_GENERATION_CRON" "${GEO_FILE_GENERATION_CRON:-}"
+  else
+    set_env_var "DSP_GEO_FILE_GENERATION_CRON" ""
+    if [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
+      geo_mode="wait-for-first-load"
+      geo_restart="no"
+    fi
+  fi
+
+  set_env_var "DSP_GEO_FILE_GENERATION_EXECUTION_MODE" "$geo_mode"
+  set_env_var "DSP_GEO_FILE_GENERATION_RESTART_POLICY" "$geo_restart"
+  set_env_var "DSP_FIRST_DATA_LOAD_MARKER" "/dsp-batch-markers/first_data_load.ready"
+}
+
+is_recurring_geo_file_generation_mode() {
+  [ "${DSP_GEO_FILE_GENERATION_RECURRING:-true}" = "true" ]
+}
+
+is_geo_wait_for_first_load_mode() {
+  [ "${DSP_GEO_FILE_GENERATION_EXECUTION_MODE:-continuous}" = "wait-for-first-load" ]
+}
+
+mark_first_data_load_ready() {
+  if ! is_object_storage_stack_enabled; then
+    return 0
+  fi
+  local marker="${DSP_FIRST_DATA_LOAD_MARKER:-/dsp-batch-markers/first_data_load.ready}"
+  if docker compose --env-file .env --profile migration run --no-deps \
+      --entrypoint sh dsp-job-migration -c "test -f '${marker}'" 2>/dev/null; then
+    return 0
+  fi
+  docker compose --env-file .env --profile migration run --no-deps \
+    --entrypoint sh dsp-job-migration -c "mkdir -p \"\$(dirname '${marker}')\" && touch '${marker}'"
 }
 
 run_migration_job_once() {
-  docker compose --env-file .env --profile migration run --rm --build \
+  docker compose --env-file .env --profile migration run --build \
     -e DSP_MIGRATION_EXECUTION_MODE=once \
     dsp-job-migration
+}
+
+run_geo_file_generation_job_once() {
+  wait_for_geo_file_generation_schema
+  docker compose --env-file .env --profile object-storage run --build \
+    -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once \
+    dsp-job-geo-file-generation
 }
 
 start_migration_service_stack() {
@@ -1311,13 +1366,79 @@ start_geo_file_generation_service() {
   ok "Geo file generation service ready (cron=${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *})"
 }
 
-ensure_object_storage_stack() {
+ensure_object_storage_ready() {
   if ! is_object_storage_stack_enabled; then
     return 0
   fi
   ensure_dsp_repositories --geo-file-job
   start_object_storage_service
-  start_geo_file_generation_service
+}
+
+ensure_object_storage_stack() {
+  if ! is_object_storage_stack_enabled; then
+    return 0
+  fi
+  ensure_object_storage_ready
+  if is_recurring_geo_file_generation_mode; then
+    start_geo_file_generation_service
+    return 0
+  fi
+  if is_geo_wait_for_first_load_mode && ! first_data_load_marker_exists; then
+    start_geo_file_generation_wait_service
+  fi
+}
+
+first_data_load_marker_exists() {
+  local marker="${DSP_FIRST_DATA_LOAD_MARKER:-/dsp-batch-markers/first_data_load.ready}"
+  docker compose --env-file .env --profile migration run --no-deps \
+    --entrypoint test dsp-job-migration -f "$marker" 2>/dev/null
+}
+
+start_geo_file_generation_wait_service() {
+  info "Starting geo file generation (wait-for-first-load, profile=object-storage)..."
+  wait_for_geo_file_generation_schema
+  docker compose --env-file .env --profile object-storage up -d --build dsp-job-geo-file-generation
+  ok "Geo file job is waiting — pre-generated downloads will be built once after the scheduled migration finishes."
+}
+
+# One-shot geo generation during ./setup.sh after the first migration and GeoServer populate.
+run_initial_geo_file_generation_if_needed() {
+  if [ "${WILL_MIGRATE:-false}" != "true" ]; then
+    return 0
+  fi
+  if ! is_geo_file_generation_enabled; then
+    return 0
+  fi
+  if [ "${GEO_FILE_GENERATION_RECURRING:-true}" != "true" ] && \
+     [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
+    return 0
+  fi
+  info "Running initial geo file generation (one-shot; may take a while)..."
+  if ! run_geo_file_generation_job_once; then
+    error "Initial geo file generation failed. Data migration already completed."
+    print_geo_file_generation_hints
+    exit 1
+  fi
+  ok "Initial geo file generation finished"
+  mark_first_data_load_ready
+}
+
+# Step 11 orchestration: object storage plus geo once, waiter, or recurring service.
+ensure_geo_file_generation_after_setup() {
+  if ! is_geo_file_generation_enabled; then
+    return 0
+  fi
+  ensure_object_storage_ready
+  if [ "${GEO_FILE_GENERATION_RECURRING:-true}" = "true" ]; then
+    run_initial_geo_file_generation_if_needed
+    start_geo_file_generation_service
+    return 0
+  fi
+  if [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
+    start_geo_file_generation_wait_service
+    return 0
+  fi
+  run_initial_geo_file_generation_if_needed
 }
 
 ensure_geo_file_generation_service_if_needed() {
@@ -1331,10 +1452,28 @@ print_geo_file_generation_hints() {
     return 0
   fi
   echo ""
-  echo "Pre-generated download files: bucket ${DSP_OBJECT_STORAGE_BUCKET:-dsp-geo-files}" \
-    "at ${DSP_OBJECT_STORAGE_ENDPOINT:-http://dsp-object-storage:8333} (cron=${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *})"
-  echo "Optional one-shot generation (in addition to the schedule):"
-  echo "  docker compose --env-file .env --profile object-storage run --rm -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation"
+  if is_recurring_geo_file_generation_mode; then
+    echo "Pre-generated download files: bucket ${DSP_OBJECT_STORAGE_BUCKET:-dsp-geo-files}" \
+      "at ${DSP_OBJECT_STORAGE_ENDPOINT:-http://dsp-object-storage:8333} (cron=${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *})"
+    echo "Optional extra one-shot (in addition to the schedule):"
+    echo "  docker compose --env-file .env --profile object-storage run -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation"
+    echo "  Logs: docker logs <container> (one-off names end with _run_<id>; service: dsp-job-geo-file-generation)"
+    return 0
+  fi
+  if is_geo_wait_for_first_load_mode || [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
+    echo "Pre-generated download files: built once automatically after the migration job completes."
+    if [ -n "${DSP_MIGRATION_SCHEDULED_AT:-}" ]; then
+      echo "  Waiting for scheduled migration at ${DSP_MIGRATION_SCHEDULED_AT} (${DSP_MIGRATION_TZ})."
+    fi
+    echo "  The geo file job is already running in wait-for-first-load mode."
+    echo "  Optional manual one-shot:"
+    echo "  docker compose --env-file .env --profile object-storage run -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation"
+    echo "  Logs: docker logs dsp-job-geo-file-generation"
+    return 0
+  fi
+  echo "Pre-generated download files: one-time generation (no recurring geo job)."
+  echo "  docker compose --env-file .env --profile object-storage run -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation"
+  echo "  Logs: docker logs <container> (one-off names end with _run_<id>)"
 }
 
 print_migration_resync_hints() {
@@ -1349,9 +1488,14 @@ print_migration_resync_hints() {
   echo "Migration execution mode: ${mode} (tz=${tz}${cron:+ cron=${cron}})"
   if [ -n "${DSP_MIGRATION_SCHEDULED_AT:-}" ]; then
     echo "GeoServer layers are published automatically after the first scheduled migration."
+    if { is_geo_wait_for_first_load_mode || [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; } \
+        && is_object_storage_stack_enabled; then
+      echo "Pre-generated download files are built once right after that migration (geo file job)."
+    fi
   fi
   echo "Optional one-shot re-sync (in addition to the schedule):"
-  echo "  docker compose --env-file .env --profile migration run --rm -e DSP_MIGRATION_EXECUTION_MODE=once dsp-job-migration"
+  echo "  docker compose --env-file .env --profile migration run -e DSP_MIGRATION_EXECUTION_MODE=once dsp-job-migration"
+  echo "  Logs: docker logs <container> (one-off names end with _run_<id>; service: dsp-job-migration)"
 }
 
 ensure_adopter_config() {
@@ -1563,10 +1707,55 @@ print_stack_url_line() {
   fi
 }
 
-# Tear down compose services, including the migration profile (job DB + migration job).
+# compose down does not remove one-off containers from compose run (without --rm they stay Exited);
+# resolve project name so explicit teardown can remove them.
+compose_project_name() {
+  if [ -n "${COMPOSE_PROJECT_NAME:-}" ]; then
+    echo "$COMPOSE_PROJECT_NAME"
+    return 0
+  fi
+
+  local from_label=""
+  local cname
+  for cname in dsp-db dsp-gateway dsp-geoserver-db dsp-job-migration; do
+    from_label="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project"}}' "$cname" 2>/dev/null || true)"
+    if [ -n "$from_label" ]; then
+      echo "$from_label"
+      return 0
+    fi
+  done
+
+  local root="${ROOT_DIR:-}"
+  if [ -z "$root" ]; then
+    root="$(pwd)"
+  fi
+  basename "$root"
+}
+
+compose_remove_project_containers() {
+  local project cid
+  project="$(compose_project_name)"
+  while IFS= read -r cid; do
+    [ -z "$cid" ] && continue
+    docker rm -f "$cid" >/dev/null 2>&1 || true
+  done < <(docker ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null || true)
+}
+
+# Tear down compose services (migration + object-storage profiles), including Exited compose run containers.
 compose_down_project() {
-  compose_profile_args
-  docker compose --env-file .env "${COMPOSE_PROFILE_ARGS[@]}" down "$@"
+  local project remaining
+  compose_remove_project_containers
+  docker compose --env-file .env \
+    --profile migration \
+    --profile object-storage \
+    down "$@" --remove-orphans
+  project="$(compose_project_name)"
+  remaining="$(docker ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null || true)"
+  if [ -n "$remaining" ]; then
+    warn "Some project containers could not be removed:"
+    docker ps -a --filter "label=com.docker.compose.project=${project}" \
+      --format '  {{.Names}} ({{.ID}})' 2>/dev/null || true
+  fi
 }
 
 # Status of this project's compose services + URLs; optional project cleanup; then exit.
@@ -1611,7 +1800,8 @@ show_stack_status_menu() {
 
 # Interactive data-prep menu for ./setup.sh.
 # Sets globals: SETUP_MODE (demo|real), WILL_MIGRATE, KEEP_MIGRATION_SERVICE,
-# MIGRATION_EXECUTION_MODE, MIGRATION_CRON, MIGRATION_SCHEDULED_AT.
+# MIGRATION_EXECUTION_MODE, MIGRATION_CRON, MIGRATION_SCHEDULED_AT,
+# GEO_FILE_GENERATION_CRON, GEO_FILE_GENERATION_RECURRING, GEO_FILE_GENERATION_WAIT.
 # Not a command substitution on purpose: error output must reach the terminal.
 prompt_setup_data_mode() {
   echo ""
@@ -1654,9 +1844,10 @@ prompt_setup_data_mode() {
   esac
 }
 
-prompt_migration_hhmm() {
+prompt_schedule_hhmm() {
   local prompt_label="${1:-Time}"
   local default_hhmm="${2:-22:00}"
+  local -n out_hhmm=$3
   local raw normalized
   while true; do
     read -r -p "${prompt_label} [${default_hhmm}]: " raw || true
@@ -1664,20 +1855,31 @@ prompt_migration_hhmm() {
       raw="$default_hhmm"
     fi
     if normalized="$(dsp_normalize_hhmm "$raw")"; then
-      MIGRATION_HHMM="$normalized"
+      out_hhmm="$normalized"
       return 0
     fi
     error "Invalid time: '${raw}' — use HH:MM (e.g. 22:00)."
   done
 }
 
-# Sets MIGRATION_CRON. Time is asked only for "every day" when no clock was already chosen.
-# $1 optional HH:MM from a scheduled first run — reused for daily cron, not asked again.
-prompt_migration_how_often() {
-  local hhmm="${1:-}"
-  local freq_choice step
+prompt_migration_hhmm() {
+  local prompt_label="${1:-Time}"
+  local default_hhmm="${2:-22:00}"
+  prompt_schedule_hhmm "$prompt_label" "$default_hhmm" MIGRATION_HHMM
+}
+
+# Writes a 5-field cron into the variable named by $2 (nameref).
+# $1 intro question, $2 output var name, $3 optional HH:MM for daily reuse, $4 default daily HH:MM.
+prompt_recurring_schedule_cron() {
+  local question="$1"
+  local cron_var_name="$2"
+  local hhmm="${3:-}"
+  local default_daily_hhmm="${4:-22:00}"
+  local -n cron_out=$cron_var_name
+  local freq_choice step picked_hhmm built
+
   echo ""
-  echo "How often should the data be synchronized after the initial migration?"
+  echo "$question"
   echo ""
   if [ -n "$hhmm" ]; then
     echo "  1) Every day at this time (${hhmm})"
@@ -1686,25 +1888,26 @@ prompt_migration_how_often() {
   fi
   echo "  2) Every N hours"
   echo "  3) Every N minutes"
+  echo "  4) Custom cron expression (5 fields)"
   echo ""
   while true; do
     read -r -p "Choice [1]: " freq_choice || true
     case "${freq_choice:-1}" in
-      1|2|3)
+      1|2|3|4)
         break
         ;;
       *)
-        error "Invalid choice: '${freq_choice}' — use 1 (every day), 2 (every N hours) or 3 (every N minutes)."
+        error "Invalid choice: '${freq_choice}' — use 1 (every day), 2 (every N hours), 3 (every N minutes) or 4 (custom cron)."
         ;;
     esac
   done
   case "${freq_choice:-1}" in
     1)
       if [ -z "$hhmm" ]; then
-        prompt_migration_hhmm "Time" "22:00"
-        hhmm="$MIGRATION_HHMM"
+        prompt_schedule_hhmm "Time" "$default_daily_hhmm" picked_hhmm
+        hhmm="$picked_hhmm"
       fi
-      MIGRATION_CRON="$(dsp_build_daily_cron "$hhmm")"
+      cron_out="$(dsp_build_daily_cron "$hhmm")"
       ;;
     2)
       while true; do
@@ -1712,7 +1915,8 @@ prompt_migration_how_often() {
         if [ -z "$step" ]; then
           step="6"
         fi
-        if MIGRATION_CRON="$(dsp_build_hourly_cron "$step")"; then
+        if built="$(dsp_build_hourly_cron "$step")"; then
+          cron_out="$built"
           case "$step" in
             6) echo "  Runs at 00:00, 06:00, 12:00, and 18:00." ;;
             24) echo "  Runs once per day at 00:00." ;;
@@ -1729,18 +1933,58 @@ prompt_migration_how_often() {
         if [ -z "$step" ]; then
           step="5"
         fi
-        if MIGRATION_CRON="$(dsp_build_minute_cron "$step")"; then
+        if built="$(dsp_build_minute_cron "$step")"; then
+          cron_out="$built"
           break
         fi
         error "Invalid interval: '${step}' — use an integer from 1 to 59."
       done
       ;;
+    4)
+      while true; do
+        local raw_cron
+        read -r -p "Cron (minute hour day month weekday) [0 22 * * *]: " raw_cron || true
+        if [ -z "$raw_cron" ]; then
+          raw_cron="0 22 * * *"
+        fi
+        if built="$(dsp_normalize_cron_5 "$raw_cron")"; then
+          cron_out="$built"
+          break
+        fi
+        error "Invalid cron: '${raw_cron}' — enter exactly 5 fields (e.g. 0 22 * * * or */15 * * * *)."
+      done
+      ;;
   esac
-  ok "Schedule cron: ${MIGRATION_CRON}"
+  ok "Schedule cron: ${cron_out}"
+}
+
+# Sets MIGRATION_CRON. $1 optional HH:MM from a scheduled first run — reused for daily cron.
+prompt_migration_how_often() {
+  local hhmm="${1:-}"
+  prompt_recurring_schedule_cron \
+    "How often should the data be synchronized after the initial migration?" \
+    MIGRATION_CRON \
+    "$hhmm" \
+    "22:00"
+}
+
+# Sets GEO_FILE_GENERATION_CRON (same schedule menu as data migration).
+prompt_geo_file_generation_schedule() {
+  echo ""
+  echo "Pre-generated download files (object storage)"
+  if [ -n "${MIGRATION_CRON:-}" ]; then
+    echo "  Migration re-sync cron: ${MIGRATION_CRON}"
+  fi
+  echo "  Schedule pre-generation in a window after migration (migration raises the flags)."
+  prompt_recurring_schedule_cron \
+    "How often should pre-generated download files be built?" \
+    GEO_FILE_GENERATION_CRON \
+    "" \
+    "02:00"
 }
 
 # Scheduled first run. Sets MIGRATION_SCHEDULED_AT and MIGRATION_HHMM.
-# Fuso: DSP_MIGRATION_TZ (já carregado do .env por ensure_dotenv).
+# Timezone: DSP_MIGRATION_TZ (already loaded from .env by ensure_dotenv).
 prompt_migration_when() {
   local date_ymd today
   echo ""
@@ -1765,85 +2009,78 @@ prompt_migration_when() {
   done
 }
 
-# Real adopter: when to run the first migration, then one-time vs continuous.
+# Real adopter: preset data-update model, then migration/geo crons when applicable.
 prompt_real_adopter_migration_plan() {
-  local when_choice how_choice run_now=false
+  local preset after_choice
 
   WILL_MIGRATE=false
   KEEP_MIGRATION_SERVICE=false
   MIGRATION_CRON=""
   MIGRATION_SCHEDULED_AT=""
+  GEO_FILE_GENERATION_CRON=""
+  GEO_FILE_GENERATION_RECURRING=true
+  GEO_FILE_GENERATION_WAIT=false
 
   echo ""
-  echo "When should the initial migration run?"
+  echo "How will your source data be updated over time?"
   echo ""
-  echo "  1) Run now"
-  echo "     Runs the first migration during this setup."
+  echo "  1) One-time load — import once, source does not change"
+  echo "  2) Living source — periodic re-sync from JDBC"
+  echo "  3) Deferred first load — first migration at a chosen date and time"
   echo ""
-  echo "  2) Schedule for later"
-  echo "     Waits until the date and time you choose, then runs the first migration."
-  echo ""
-  read -r -p "Choice [1/2]: " when_choice || true
-  case "$when_choice" in
+  read -r -p "Choice [1/2/3]: " preset || true
+  case "$preset" in
     1|"")
-      run_now=true
+      WILL_MIGRATE=true
+      MIGRATION_EXECUTION_MODE="once"
+      KEEP_MIGRATION_SERVICE=false
+      GEO_FILE_GENERATION_RECURRING=false
+      GEO_FILE_GENERATION_WAIT=false
       ;;
     2)
-      run_now=false
-      prompt_migration_when
-      ;;
-    *)
-      error "Invalid choice: '${when_choice}' — use 1 (run now) or 2 (schedule for later)."
-      error "Run './${DSP_ORCHESTRATION_SCRIPT}' again."
-      exit 1
-      ;;
-  esac
-
-  echo ""
-  echo "How should the migration run?"
-  echo ""
-  echo "  1) One-time"
-  if [ "$run_now" = "true" ]; then
-    echo "     Runs once during this setup, then stops the migration job container."
-  else
-    echo "     Runs once at the scheduled time, then stops the migration job container."
-  fi
-  echo ""
-  echo "  2) Continuous (periodic re-sync)"
-  if [ "$run_now" = "true" ]; then
-    echo "     Runs the first migration during this setup, then keeps the job container"
-    echo "     running and re-syncs from the source on a recurring schedule you choose next."
-  else
-    echo "     Runs the first migration at the scheduled time, then keeps the job container"
-    echo "     running and re-syncs from the source on a recurring schedule you choose next."
-  fi
-  echo ""
-  read -r -p "Choice [1/2]: " how_choice || true
-  case "$how_choice" in
-    1|"")
-      if [ "$run_now" = "true" ]; then
-        WILL_MIGRATE=true
-        MIGRATION_EXECUTION_MODE="once"
-        KEEP_MIGRATION_SERVICE=false
-      else
-        WILL_MIGRATE=false
-        MIGRATION_EXECUTION_MODE="scheduled-once"
-        KEEP_MIGRATION_SERVICE=true
-      fi
-      ;;
-    2)
+      WILL_MIGRATE=true
       MIGRATION_EXECUTION_MODE="continuous"
       KEEP_MIGRATION_SERVICE=true
-      if [ "$run_now" = "true" ]; then
-        WILL_MIGRATE=true
-        prompt_migration_how_often
-      else
-        WILL_MIGRATE=false
-        prompt_migration_how_often "$MIGRATION_HHMM"
-      fi
+      GEO_FILE_GENERATION_RECURRING=true
+      prompt_migration_how_often
+      prompt_geo_file_generation_schedule
+      ;;
+    3)
+      prompt_migration_when
+      echo ""
+      echo "After the first load, will the source be re-synchronized?"
+      echo ""
+      echo "  1) No — static data (one-time load only)"
+      echo "  2) Yes — periodic re-sync"
+      echo ""
+      read -r -p "Choice [1/2]: " after_choice || true
+      case "${after_choice:-1}" in
+        1|"")
+          WILL_MIGRATE=false
+          MIGRATION_EXECUTION_MODE="scheduled-once"
+          KEEP_MIGRATION_SERVICE=true
+          GEO_FILE_GENERATION_RECURRING=false
+          GEO_FILE_GENERATION_WAIT=true
+          info "The migration job will run at the scheduled time, load data, and publish GeoServer layers."
+          info "Pre-generated download files will then be built once automatically (no separate geo schedule)."
+          ;;
+        2)
+          WILL_MIGRATE=false
+          MIGRATION_EXECUTION_MODE="continuous"
+          KEEP_MIGRATION_SERVICE=true
+          GEO_FILE_GENERATION_RECURRING=true
+          prompt_migration_how_often "$MIGRATION_HHMM"
+          prompt_geo_file_generation_schedule
+          ;;
+        *)
+          error "Invalid choice: '${after_choice}' — use 1 (static) or 2 (re-sync)."
+          error "Run './${DSP_ORCHESTRATION_SCRIPT}' again."
+          exit 1
+          ;;
+      esac
       ;;
     *)
-      error "Invalid choice: '${how_choice}' — use 1 (one-time) or 2 (continuous)."
+      error "Invalid choice: '${preset}' — use 1 (one-time), 2 (living source) or 3 (deferred)."
       error "Run './${DSP_ORCHESTRATION_SCRIPT}' again."
       exit 1
       ;;

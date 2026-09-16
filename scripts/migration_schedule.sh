@@ -73,6 +73,25 @@ dsp_valid_cron_5() {
   [ "${#fields[@]}" -eq 5 ]
 }
 
+# Trim and validate a custom 5-field cron line; prints normalized cron on stdout.
+dsp_normalize_cron_5() {
+  local raw="${1:-}"
+  local fields
+  raw="${raw#"${raw%%[![:space:]]*}"}"
+  raw="${raw%"${raw##*[![:space:]]}"}"
+  read -r -a fields <<< "$raw"
+  if [ "${#fields[@]}" -ne 5 ]; then
+    return 1
+  fi
+  local field
+  for field in "${fields[@]}"; do
+    if [ -z "$field" ]; then
+      return 1
+    fi
+  done
+  printf '%s %s %s %s %s\n' "${fields[0]}" "${fields[1]}" "${fields[2]}" "${fields[3]}" "${fields[4]}"
+}
+
 dsp_valid_iso_date() {
   [[ "${1:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
 }
