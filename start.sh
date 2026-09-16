@@ -85,7 +85,7 @@ start_geoserver_exhibition "up" "$MIGRATION_CONFIG"
 start_geoserver_download "up"
 
 info "Building and starting application containers..."
-docker compose --env-file .env up -d --build dsp-backend dsp-frontend
+docker compose --env-file .env up -d --build --force-recreate dsp-backend dsp-frontend
 ok "Backend and frontend are running"
 
 start_gateway

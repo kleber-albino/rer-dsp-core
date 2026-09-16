@@ -1121,6 +1121,7 @@ ensure_dotenv() {
     ok ".env created — review values if needed"
   else
     info "Using existing .env"
+    merge_dotenv_from_example
   fi
 
   set -a
@@ -1131,8 +1132,49 @@ ensure_dotenv() {
   migrate_dotenv_to_gateway
 }
 
-# .env anteriores ao gateway apontam o frontend para uma porta que não existe mais.
-# Só reescreve valores que vieram do .env.example antigo, preservando o que o adotante ajustou.
+# Adds new variables from .env.example to the existing .env file, without overwriting
+# values ​​the user has already configured.
+merge_dotenv_from_example() {
+  local env_file="${ROOT_DIR:-.}/.env"
+  local example_file="${ROOT_DIR:-.}/.env.example"
+  local line key value
+  local -a added=()
+
+  if [ ! -f "$example_file" ] || [ ! -f "$env_file" ]; then
+    return 0
+  fi
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "$line" != *"="* ]] && continue
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+
+    if ! grep -q "^${key}=" "$env_file"; then
+      if [[ "$value" == \"*\" ]]; then
+        value="${value#\"}"
+        value="${value%\"}"
+      fi
+      set_env_var "$key" "$value"
+      added+=("$key")
+    fi
+  done <"$example_file"
+
+  if [ "${#added[@]}" -gt 0 ]; then
+    warn ".env updated with new variables from .env.example:"
+    local item
+    for item in "${added[@]}"; do
+      warn "  + ${item}"
+    done
+  fi
+}
+
+# .env files predating the gateway point the frontend to a port that no longer exists.
+# Only overwrites values ​​from the old .env.example, preserving any adjustments made by the adopter.
 migrate_dotenv_to_gateway() {
   local migrated=false
 
@@ -2107,7 +2149,7 @@ start_gateway() {
   local i
 
   info "Building and starting gateway (nginx)..."
-  docker compose --env-file .env up -d --build dsp-gateway
+  docker compose --env-file .env up -d --build --force-recreate dsp-gateway
   ok "Gateway container started"
 
   info "Waiting for the gateway at ${base_url}/gateway/health ..."
