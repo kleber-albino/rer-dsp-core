@@ -1292,30 +1292,46 @@ is_geo_wait_for_first_load_mode() {
   [ "${DSP_GEO_FILE_GENERATION_EXECUTION_MODE:-continuous}" = "wait-for-first-load" ]
 }
 
+# Auxiliary marker volume runs use --rm (no need to keep containers for docker logs).
+# One-shot migration (run_migration_job_once) uses compose up on dsp-job-migration (container kept Exited for logs).
 mark_first_data_load_ready() {
   if ! is_object_storage_stack_enabled; then
     return 0
   fi
   local marker="${DSP_FIRST_DATA_LOAD_MARKER:-/dsp-batch-markers/first_data_load.ready}"
-  if docker compose --env-file .env --profile migration run --no-deps \
+  if docker compose --env-file .env --profile migration run --rm --no-deps \
       --entrypoint sh dsp-job-migration -c "test -f '${marker}'" 2>/dev/null; then
     return 0
   fi
-  docker compose --env-file .env --profile migration run --no-deps \
+  docker compose --env-file .env --profile migration run --rm --no-deps \
     --entrypoint sh dsp-job-migration -c "mkdir -p \"\$(dirname '${marker}')\" && touch '${marker}'"
 }
 
+remove_stale_compose_run_container() {
+  docker rm -f "$1" >/dev/null 2>&1 || true
+}
+
 run_migration_job_once() {
-  docker compose --env-file .env --profile migration run --build \
-    -e DSP_MIGRATION_EXECUTION_MODE=once \
+  if ! wait_for_postgres_initialization dsp-db "${DSP_DB_USER:-dsp}" "${DSP_DB_NAME:-dsp-db}"; then
+    return 1
+  fi
+  if ! wait_for_data_migration_schema; then
+    return 1
+  fi
+  remove_stale_compose_run_container "dsp-job-migration"
+  DSP_MIGRATION_EXECUTION_MODE=once docker compose --env-file .env --profile migration up --build \
+    --abort-on-container-exit --exit-code-from dsp-job-migration \
     dsp-job-migration
+  docker update --restart no dsp-job-migration >/dev/null 2>&1 || true
 }
 
 run_geo_file_generation_job_once() {
   wait_for_geo_file_generation_schema
-  docker compose --env-file .env --profile object-storage run --build \
-    -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once \
+  remove_stale_compose_run_container "dsp-job-geo-file-generation"
+  DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once docker compose --env-file .env --profile object-storage up --build \
+    --abort-on-container-exit --exit-code-from dsp-job-geo-file-generation \
     dsp-job-geo-file-generation
+  docker update --restart no dsp-job-geo-file-generation >/dev/null 2>&1 || true
 }
 
 start_migration_service_stack() {
@@ -1432,7 +1448,7 @@ ensure_object_storage_stack() {
 
 first_data_load_marker_exists() {
   local marker="${DSP_FIRST_DATA_LOAD_MARKER:-/dsp-batch-markers/first_data_load.ready}"
-  docker compose --env-file .env --profile migration run --no-deps \
+  docker compose --env-file .env --profile migration run --rm --no-deps \
     --entrypoint test dsp-job-migration -f "$marker" 2>/dev/null
 }
 
@@ -1498,8 +1514,8 @@ print_geo_file_generation_hints() {
     echo "Pre-generated download files: bucket ${DSP_OBJECT_STORAGE_BUCKET:-dsp-geo-files}" \
       "at ${DSP_OBJECT_STORAGE_ENDPOINT:-http://dsp-object-storage:8333} (cron=${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *})"
     echo "Optional extra one-shot (in addition to the schedule):"
-    echo "  docker compose --env-file .env --profile object-storage run -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation"
-    echo "  Logs: docker logs <container> (one-off names end with _run_<id>; service: dsp-job-geo-file-generation)"
+    echo "  docker rm -f dsp-job-geo-file-generation; DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once docker compose --env-file .env --profile object-storage up --build --abort-on-container-exit --exit-code-from dsp-job-geo-file-generation dsp-job-geo-file-generation"
+    echo "  Logs: docker logs dsp-job-geo-file-generation"
     return 0
   fi
   if is_geo_wait_for_first_load_mode || [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
@@ -1509,13 +1525,13 @@ print_geo_file_generation_hints() {
     fi
     echo "  The geo file job is already running in wait-for-first-load mode."
     echo "  Optional manual one-shot:"
-    echo "  docker compose --env-file .env --profile object-storage run -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation"
+    echo "  docker rm -f dsp-job-geo-file-generation; DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once docker compose --env-file .env --profile object-storage up --build --abort-on-container-exit --exit-code-from dsp-job-geo-file-generation dsp-job-geo-file-generation"
     echo "  Logs: docker logs dsp-job-geo-file-generation"
     return 0
   fi
   echo "Pre-generated download files: one-time generation (no recurring geo job)."
-  echo "  docker compose --env-file .env --profile object-storage run -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation"
-  echo "  Logs: docker logs <container> (one-off names end with _run_<id>)"
+  echo "  docker rm -f dsp-job-geo-file-generation; DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once docker compose --env-file .env --profile object-storage up --build --abort-on-container-exit --exit-code-from dsp-job-geo-file-generation dsp-job-geo-file-generation"
+  echo "  Logs: docker logs dsp-job-geo-file-generation"
 }
 
 print_migration_resync_hints() {
@@ -1536,8 +1552,8 @@ print_migration_resync_hints() {
     fi
   fi
   echo "Optional one-shot re-sync (in addition to the schedule):"
-  echo "  docker compose --env-file .env --profile migration run -e DSP_MIGRATION_EXECUTION_MODE=once dsp-job-migration"
-  echo "  Logs: docker logs <container> (one-off names end with _run_<id>; service: dsp-job-migration)"
+  echo "  docker rm -f dsp-job-migration; DSP_MIGRATION_EXECUTION_MODE=once docker compose --env-file .env --profile migration up --build --abort-on-container-exit --exit-code-from dsp-job-migration dsp-job-migration"
+  echo "  Logs: docker logs dsp-job-migration"
 }
 
 ensure_adopter_config() {

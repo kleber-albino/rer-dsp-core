@@ -26,7 +26,7 @@ Brazil demo (`./setup.sh` option 1) does **not** start this service nor `dsp-obj
 | `DSP_GEO_FILE_GENERATION_EXECUTION_MODE` | Behaviour |
 | --- | --- |
 | `continuous` (default) | `supercronic` on `DSP_GEO_FILE_GENERATION_CRON` |
-| `once` | Runs `java -jar /app/app.jar` and exits — used by `compose run` (container stays **Exited**; `docker logs <name>`) |
+| `once` | Runs `java -jar /app/app.jar` and exits — `./setup.sh` uses `compose up` on `dsp-job-geo-file-generation` (same name as scheduled/wait modes; `docker logs dsp-job-geo-file-generation`) |
 | `wait-for-first-load` | Polls `DSP_FIRST_DATA_LOAD_MARKER`, then runs once and exits (deferred static load) |
 
 | Variable | Notes |
@@ -47,8 +47,7 @@ the flags. A failed JAR does not stop the continuous container.
 `DSP_GEO_FILE_GENERATION_RECURRING=false` skips the continuous geo container (one-time or wait-for-first-load).
 Reapplying `./config.sh` does not change migration or pre-generation crons in `.env`.
 
-With **Run now** during setup, after GeoServer populate, `./setup.sh` runs one `once` generation
-(`compose run`, container retained) before starting the continuous service.
+With **Run now** during setup, after GeoServer populate, `./setup.sh` runs one `once` generation via `compose up` on **`dsp-job-geo-file-generation`** before starting the continuous service when applicable.
 
 The backend reads the same bucket (`DSP_OBJECT_STORAGE_*` in `.env`) to serve the file and
 to report `lastFileGenerated` from the object metadata `generated-at`.
@@ -64,10 +63,12 @@ docker compose --env-file .env --profile object-storage up -d --build dsp-job-ge
 **One-time now** (`once`):
 
 ```bash
-docker compose --env-file .env --profile object-storage run --build \
-  -e DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once dsp-job-geo-file-generation
+docker rm -f dsp-job-geo-file-generation
+DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once docker compose --env-file .env --profile object-storage up --build \
+  --abort-on-container-exit --exit-code-from dsp-job-geo-file-generation \
+  dsp-job-geo-file-generation
 ```
 
-One-off containers are not removed automatically; inspect logs with `docker logs` on the `…_run_<id>` name from `docker ps -a`. Scheduled/wait modes use fixed names `dsp-job-geo-file-generation`.
+Logs: `docker logs dsp-job-geo-file-generation` (same container name as scheduled/wait modes).
 
 The image copies `application.yaml`, `downloadThemesConfig.json` and the entrypoint at build time.

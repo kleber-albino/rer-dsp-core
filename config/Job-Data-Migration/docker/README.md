@@ -12,7 +12,7 @@ The `dsp-job-migration` service uses Compose profile `migration`. Batch metadata
 
 | `DSP_MIGRATION_EXECUTION_MODE` | Behaviour |
 | --- | --- |
-| `once` (default) | Runs `java -jar /app/app.jar` and exits — used by `compose run` (container stays **Exited**; `docker logs <name>`) and setup Run now + One-time |
+| `once` (default) | Runs `java -jar /app/app.jar` and exits — `./setup.sh` uses `compose up` on `dsp-job-migration` (same container name as scheduled modes; stays **Exited**; `docker logs dsp-job-migration`) |
 | `continuous` | If `DSP_MIGRATION_SCHEDULED_AT` is set (Schedule for later), waits, runs one first load, publishes both GeoServers, then `supercronic` on `DSP_MIGRATION_CRON`. Run now + Continuous has no wait (first load and populate already ran in setup). |
 | `scheduled-once` | Waits until `DSP_MIGRATION_SCHEDULED_AT`, runs once, publishes both GeoServers, exits (Schedule for later + One-time) |
 
@@ -31,11 +31,13 @@ Scheduled first load: [`publish_geoservers.sh`](publish_geoservers.sh) runs the 
 **One-time now** (`once`):
 
 ```bash
-docker compose --env-file .env --profile migration run --build \
-  -e DSP_MIGRATION_EXECUTION_MODE=once dsp-job-migration
+docker rm -f dsp-job-migration
+DSP_MIGRATION_EXECUTION_MODE=once docker compose --env-file .env --profile migration up --build \
+  --abort-on-container-exit --exit-code-from dsp-job-migration \
+  dsp-job-migration
 ```
 
-One-off containers are not removed automatically; inspect logs with `docker logs` on the `…_run_<id>` name from `docker ps -a`.
+`./setup.sh` (Run now) runs the same `compose up` flow on container **`dsp-job-migration`** (inside the `rer-dsp-core` stack). Logs: `docker logs dsp-job-migration`.
 
 **Scheduled service** (`continuous` or `scheduled-once`):
 
@@ -46,8 +48,10 @@ docker compose --env-file .env --profile migration up -d --build dsp-job-migrati
 Optional extra one-shot on top of the schedule:
 
 ```bash
-docker compose --env-file .env --profile migration run \
-  -e DSP_MIGRATION_EXECUTION_MODE=once dsp-job-migration
+docker rm -f dsp-job-migration
+DSP_MIGRATION_EXECUTION_MODE=once docker compose --env-file .env --profile migration up --build \
+  --abort-on-container-exit --exit-code-from dsp-job-migration \
+  dsp-job-migration
 ```
 
 The image copies `application.yaml`, `mapLayersConfig.json`, the entrypoint, `publish_geoservers.sh`,
