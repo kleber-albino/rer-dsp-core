@@ -1,7 +1,7 @@
-# Porta de entrada única da stack DSP.
-# Processado por envsubst na subida do container (apenas variáveis DSP_*, ver NGINX_ENVSUBST_FILTER).
+# Single entry point for the DSP stack.
+# Processed by envsubst on container start (DSP_* variables only; see NGINX_ENVSUBST_FILTER).
 
-# Zona de cache declarada sempre; o uso efetivo é controlado por DSP_GATEWAY_CACHE_BYPASS.
+# Cache zone is always declared; effective use is controlled by DSP_GATEWAY_CACHE_BYPASS.
 proxy_cache_path /var/cache/nginx/dsp
                  levels=1:2
                  keys_zone=dsp_cache:10m
@@ -14,14 +14,14 @@ server {
     listen      [::]:8080;
     server_name _;
 
-    # DNS interno do Docker. Combinado com upstreams em variável, permite que o gateway
-    # suba mesmo com algum container parado (responde 502 em vez de falhar no boot).
+    # Docker internal DNS. Combined with variable upstreams, lets the gateway
+    # start even when a container is down (returns 502 instead of failing on boot).
     resolver 127.0.0.11 valid=10s ipv6=off;
 
     client_max_body_size 16m;
 
-    # O container escuta em 8080 mas é publicado em outra porta; sem isso os redirects
-    # locais sairiam apontando para a porta interna.
+    # The container listens on 8080 but is published on another port; without this, local
+    # redirects would point at the internal port.
     absolute_redirect off;
 
     access_log /var/log/nginx/access.log;
@@ -34,14 +34,14 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Forwarded-Host  $host;
 
-    # Vazio liga o cache; qualquer valor não vazio faz bypass.
+    # Empty enables cache; any non-empty value bypasses it.
     set $dsp_cache_bypass "${DSP_GATEWAY_CACHE_BYPASS}";
 
     location = / {
         return 302 /dsp/;
     }
 
-    # Sem a barra final nenhum prefixo casa; redireciona para a forma canônica.
+    # Without the trailing slash no prefix matches; redirect to the canonical form.
     location = /dsp {
         return 301 /dsp/;
     }
@@ -75,10 +75,10 @@ server {
         proxy_read_timeout 300s;
     }
 
-    # Endpoints de serviço WMS/WFS: sem sessão, é o que vale a pena cachear.
-    # Locations regex têm precedência sobre as de prefixo abaixo, que servem a UI web e a REST.
-    # O GeoServer responde "Cache-Control: max-age=0, must-revalidate" em toda requisição;
-    # ignorar esse header é o que permite o cache funcionar.
+    # WMS/WFS service endpoints: no session, worth caching.
+    # Regex locations take precedence over prefix ones below, which serve web UI and REST.
+    # GeoServer responds with "Cache-Control: max-age=0, must-revalidate" on every request;
+    # ignoring that header is what makes caching work.
     location ~ ^/geoserver-exhibition/[^/]+/(wms|wfs)$ {
         set $dsp_geoserver_exhibition dsp-geoserver-exhibition:8080;
         rewrite ^/geoserver-exhibition/(.*)$ /geoserver/$1 break;
@@ -109,9 +109,9 @@ server {
         add_header X-Cache-Status $upstream_cache_status always;
     }
 
-    # Os dois GeoServers respondem em /geoserver internamente, então cada um recebe um prefixo
-    # externo próprio e um rewrite. Os links que eles geram vêm corretos via PROXY_BASE_URL.
-    # Aqui fica o restante de cada um (UI web, REST): sem cache, preserva a sessão.
+    # Both GeoServers respond on /geoserver internally, so each gets its own external prefix
+    # and rewrite. Links they generate are correct via PROXY_BASE_URL.
+    # Everything else (web UI, REST): no cache, preserves session.
     location /geoserver-exhibition/ {
         set $dsp_geoserver_exhibition dsp-geoserver-exhibition:8080;
         rewrite ^/geoserver-exhibition/(.*)$ /geoserver/$1 break;

@@ -27,8 +27,8 @@ _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=migration_schedule.sh
 source "$_COMMON_DIR/migration_schedule.sh"
 
-# Base pública da stack (gateway). DSP_PUBLIC_BASE_URL tem precedência; sem ela,
-# monta a URL a partir do host e da porta do gateway, omitindo a porta 80.
+# Public base URL of the stack (gateway). DSP_PUBLIC_BASE_URL takes precedence; otherwise
+# build the URL from the gateway host and port, omitting port 80.
 dsp_public_base_url() {
   if [ -n "${DSP_PUBLIC_BASE_URL:-}" ]; then
     echo "${DSP_PUBLIC_BASE_URL%/}"
@@ -275,8 +275,8 @@ ensure_download_themes_config() {
   warn_urls_outside_gateway "$active" "Download themes config"
 }
 
-# As URLs de WMS/WFS são consumidas pelo browser e precisam apontar para o gateway.
-# Configs gerados antes do gateway ainda trazem as portas antigas e quebram o mapa em silêncio.
+# WMS/WFS URLs are consumed by the browser and must point at the gateway.
+# Configs generated before the gateway still carry legacy host ports and break the map silently.
 warn_urls_outside_gateway() {
   local cfg="$1"
   local label="$2"
@@ -402,8 +402,8 @@ ensure_map_layers_config() {
   warn_urls_outside_gateway "$active" "Map layers config"
 }
 
-# Checa a REST API por dentro do container: os GeoServers não publicam porta no host,
-# o acesso externo passa pelo gateway (que sobe depois deles).
+# Check the REST API from inside the container: GeoServers do not publish a host port;
+# external access goes through the gateway (which starts after them).
 wait_for_geoserver() {
   local compose_service="${1:-dsp-geoserver-exhibition}"
   local user="$2"

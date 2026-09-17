@@ -87,7 +87,7 @@ etl:
     geometry_column: "<source_geom>"
     created_at_column: "<source_created_at>"
     updated_at_column: "<source_updated_at>"           # optional column
-    # Placeholder fixo: área calculada pelo job KPI (não migrada da origem).
+    # Fixed placeholder: area computed by the KPI job (not migrated from source).
     area_column: area
     additional_columns: []
     where_clause: "1=1"
