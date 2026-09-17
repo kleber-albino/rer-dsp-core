@@ -95,7 +95,7 @@ Configura o adotante
 
 - `./config.sh` — configura somente o adotante (dados, mappings, camadas, interface, credenciais SeaweedFS no `.env`). **Não** pergunta horário de job batch.
 - `./setup.sh` — escolhe demonstração ou adotante real; no adotante real, define **quando** e **como** a migração roda e o cron da **pré-geração** de arquivos (`DSP_GEO_FILE_GENERATION_CRON` no `.env`).
-- `./start.sh` — sobe a stack usando a configuração já definida (não pergunta agendas de job).
+- `./start.sh` — sobe **somente** backend, frontend e gateway (a infraestrutura — BDs, GeoServers, jobs — deve já estar rodando após o `./setup.sh`). Não pergunta agendas de job. Se você fez `docker compose down` sem `-v`, suba a infra com o comando `docker compose` indicado quando o `./start.sh` falhar, depois rode `./start.sh` de novo.
 
 No wizard do `./config.sh`, L1, L2, L3 e AOI são sempre configurados; generic layers são opcionais (`etl.layers`). O `application.yaml` do job recebe `execution-jobs` derivados automaticamente (jobs estruturais sempre `true`; `layer-jobs` só quando houver generic layers).
 

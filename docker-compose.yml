@@ -1,4 +1,4 @@
-# Usage: ./config.sh && ./setup.sh && ./start.sh
+# Usage: ./config.sh && ./setup.sh (infra + data) && ./start.sh (backend, frontend, gateway)
 # (.env is created automatically from .env.example on first script run)
 
 services:

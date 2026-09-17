@@ -384,9 +384,7 @@ PY
   ok "WMS layer ids and style colors match Exhibition contract"
 }
 
-# Ensures config/map/mapLayersConfig.json exists, is valid JSON, was edited
-# from the template, and keeps the required WMS layer ids/colors. Shared by
-# setup.sh and start.sh so the validation stays identical in both.
+# Ensures mapLayersConfig.json is valid, differs from template, and has required WMS ids/colors. Used by setup.sh.
 ensure_map_layers_config() {
   local example="$ROOT_DIR/config/map/mapLayersConfig.json.example"
   local active="$ROOT_DIR/config/map/mapLayersConfig.json"
@@ -1576,6 +1574,138 @@ start_databases_and_wait() {
   ok "Databases are ready"
 }
 
+# Checks config file exists and JSON is valid (no template comparison).
+ensure_runtime_json_file() {
+  local label="$1"
+  local active="$2"
+
+  if [ ! -f "$active" ]; then
+    error "${label} not found:"
+    echo "        $active"
+    error "Run ./config.sh and ./setup.sh first."
+    exit 1
+  fi
+  if ! validate_json_file "$active"; then
+    error "${label} contains invalid JSON:"
+    echo "        $active"
+    exit 1
+  fi
+  ok "${label} present: $active"
+}
+
+# Light validation for ./start.sh (exists + valid JSON; no template comparison).
+ensure_runtime_config_files_exist() {
+  ensure_runtime_json_file "Installation config" \
+    "$ROOT_DIR/config/installation/installation-config.json"
+  ensure_runtime_json_file "Map layers config" \
+    "$ROOT_DIR/config/map/mapLayersConfig.json"
+  ensure_runtime_json_file "Download themes config" \
+    "$ROOT_DIR/config/downloads/downloadThemesConfig.json"
+}
+
+# Infrastructure container is ready (HEALTHY or RUNNING in compose ps).
+is_setup_infra_service_ready() {
+  local svc="$1"
+  local status
+
+  status="$(stack_service_status "$svc")"
+  case "$status" in
+    HEALTHY|RUNNING)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Services ./setup.sh must leave running before ./start.sh.
+setup_infra_required_services() {
+  printf '%s\n' \
+    dsp-db \
+    dsp-geoserver-db \
+    dsp-geoserver-exhibition \
+    dsp-geoserver-download
+
+  if is_persistent_migration_mode; then
+    if is_scheduled_once_migration_mode && migration_scheduled_once_completed; then
+      :
+    else
+      printf '%s\n' dsp-job-migration
+    fi
+  fi
+
+  if ! is_object_storage_stack_enabled; then
+    return 0
+  fi
+
+  printf '%s\n' dsp-object-storage
+  if is_recurring_geo_file_generation_mode || is_geo_wait_for_first_load_mode; then
+    printf '%s\n' dsp-job-geo-file-generation
+  fi
+}
+
+# Hint after require_setup_infra_ready fails (copy-paste compose command).
+print_infra_recovery_hint() {
+  local profiles="--profile migration"
+  local services="dsp-db dsp-geoserver-db dsp-geoserver-exhibition dsp-geoserver-download"
+
+  if is_object_storage_stack_enabled; then
+    profiles="${profiles} --profile object-storage"
+  fi
+  if is_persistent_migration_mode; then
+    if ! { is_scheduled_once_migration_mode && migration_scheduled_once_completed; }; then
+      services="${services} dsp-job-migration"
+    fi
+  fi
+  if is_object_storage_stack_enabled; then
+    services="${services} dsp-object-storage"
+    if is_recurring_geo_file_generation_mode || is_geo_wait_for_first_load_mode; then
+      services="${services} dsp-job-geo-file-generation"
+    fi
+  fi
+
+  echo ""
+  echo "Infrastructure is not ready. ./start.sh only starts backend, frontend and gateway."
+  echo "First time: run ./setup.sh"
+  echo "After 'docker compose down' (without -v), start infrastructure again (no migration, no layer republish):"
+  echo ""
+  echo "  docker compose --env-file .env ${profiles} up -d --build ${services}"
+  echo ""
+  echo "Then run ./start.sh again."
+  echo ""
+}
+
+# Exits if any setup_infra_required_services container is not running.
+require_setup_infra_ready() {
+  local svc
+  local missing=false
+
+  load_stack_service_statuses true
+  while IFS= read -r svc; do
+    [ -z "$svc" ] && continue
+    if ! is_setup_infra_service_ready "$svc"; then
+      error "Infrastructure service not ready: ${svc} ($(stack_service_status "$svc"))"
+      missing=true
+    fi
+  done < <(setup_infra_required_services)
+
+  if [ "$missing" = true ]; then
+    print_infra_recovery_hint
+    exit 1
+  fi
+  ok "Infrastructure is running"
+}
+
+# Starts backend, frontend and gateway without compose depends_on (DBs/GeoServers).
+start_application_stack() {
+  info "Building and starting application containers..."
+  # --no-deps: do not start DBs/GeoServers via depends_on; infra was validated earlier.
+  docker compose --env-file .env up -d --build --no-deps dsp-backend dsp-frontend
+  ok "Backend and frontend are running"
+  start_gateway
+}
+
 # Runtime stack status helpers (container state / Docker healthcheck — no HTTP probes).
 
 is_stack_optional_service() {
@@ -2292,11 +2422,11 @@ start_geoserver_exhibition() {
   fi
 
   if [ "$mode" = "up" ]; then
-    # start.sh: rebuild so map JSON in the image is current; does not republish layers.
+    # mode=up: start without republishing layers (populate runs in setup).
     info "Building and starting GeoServer Exhibition..."
     docker compose --env-file .env up -d --build dsp-geoserver-exhibition
   else
-    # populate | start — setup builds the image; populate also publishes layers.
+    # mode=populate|start: setup builds the image; populate also publishes layers.
     info "Building and starting GeoServer Exhibition..."
     docker compose --env-file .env up -d --build dsp-geoserver-exhibition
   fi
@@ -2326,9 +2456,11 @@ start_geoserver_download() {
   local mode="${1:-up}"
 
   if [ "$mode" = "up" ]; then
+    # mode=up: start without republishing layers (populate runs in setup).
     info "Building and starting GeoServer Download..."
     docker compose --env-file .env up -d --build dsp-geoserver-download
   else
+    # mode=populate|start: setup builds the image; populate also publishes layers.
     info "Building and starting GeoServer Download..."
     docker compose --env-file .env up -d --build dsp-geoserver-download
   fi
@@ -2359,8 +2491,9 @@ start_gateway() {
   base_url="$(dsp_public_base_url)"
   local i
 
+  # --no-deps: do not restart GeoServers/backend only because of gateway depends_on.
   info "Building and starting gateway (nginx)..."
-  docker compose --env-file .env up -d --build dsp-gateway
+  docker compose --env-file .env up -d --build --no-deps dsp-gateway
   ok "Gateway container started"
 
   info "Waiting for the gateway at ${base_url}/gateway/health ..."
@@ -2451,6 +2584,9 @@ print_stack_usage_hints() {
   echo "Migrate / (re)populate data:"
   echo "  ./setup.sh"
   print_migration_resync_hints
+  echo ""
+  echo "Application only (backend, frontend, gateway): ./start.sh"
+  echo "  Requires infrastructure running; if you ran compose down, use the compose command printed when ./start.sh fails."
   echo ""
   echo "Rebuild frontend only: docker compose up -d --build dsp-frontend"
   echo "Logs:       docker compose logs -f"
