@@ -1238,6 +1238,7 @@ persist_batch_jobs_env() {
   set_env_var "DSP_GEO_FILE_GENERATION_EXECUTION_MODE" "$geo_mode"
   set_env_var "DSP_GEO_FILE_GENERATION_RESTART_POLICY" "$geo_restart"
   set_env_var "DSP_FIRST_DATA_LOAD_MARKER" "/dsp-batch-markers/first_data_load.ready"
+  set_env_var "DSP_SETUP_DATA_MODE" "real"
 }
 
 is_recurring_geo_file_generation_mode() {
@@ -1335,9 +1336,21 @@ compose_profile_args() {
 }
 
 clear_object_storage_env_for_demo() {
+  set_env_var "DSP_SETUP_DATA_MODE" "demo"
   set_env_var "DSP_OBJECT_STORAGE_ENDPOINT" ""
   set_env_var "DSP_OBJECT_STORAGE_ACCESS_KEY" ""
   set_env_var "DSP_OBJECT_STORAGE_SECRET_KEY" ""
+  set_env_var "DSP_MIGRATION_EXECUTION_MODE" "once"
+  set_env_var "DSP_MIGRATION_CRON" ""
+  set_env_var "DSP_MIGRATION_SCHEDULED_AT" ""
+  set_env_var "DSP_GEO_FILE_GENERATION_RECURRING" "true"
+  set_env_var "DSP_GEO_FILE_GENERATION_CRON" ""
+  set_env_var "DSP_GEO_FILE_GENERATION_EXECUTION_MODE" "continuous"
+}
+
+# Demonstration setup (./setup.sh option 1): DBs + GeoServers only; no migration/object-storage jobs.
+is_demo_stack_mode() {
+  [ "${DSP_SETUP_DATA_MODE:-}" = "demo" ]
 }
 
 wait_for_object_storage_health() {
@@ -1603,14 +1616,14 @@ ensure_runtime_config_files_exist() {
     "$ROOT_DIR/config/downloads/downloadThemesConfig.json"
 }
 
-# Infrastructure container is ready (HEALTHY or RUNNING in compose ps).
+# Infrastructure container is ready (HEALTHY, RUNNING, or STARTING in compose ps).
 is_setup_infra_service_ready() {
   local svc="$1"
   local status
 
   status="$(stack_service_status "$svc")"
   case "$status" in
-    HEALTHY|RUNNING)
+    HEALTHY|RUNNING|STARTING)
       return 0
       ;;
     *)
@@ -1619,13 +1632,23 @@ is_setup_infra_service_ready() {
   esac
 }
 
-# Services ./setup.sh must leave running before ./start.sh.
-setup_infra_required_services() {
+# Core DB + GeoServer services required for both demo and real adopter.
+setup_infra_core_services() {
   printf '%s\n' \
     dsp-db \
     dsp-geoserver-db \
     dsp-geoserver-exhibition \
     dsp-geoserver-download
+}
+
+# Services ./setup.sh must leave running before ./start.sh.
+setup_infra_required_services() {
+  if is_demo_stack_mode || is_quickstart_configured; then
+    setup_infra_core_services
+    return 0
+  fi
+
+  setup_infra_core_services
 
   if is_persistent_migration_mode; then
     if is_scheduled_once_migration_mode && migration_scheduled_once_completed; then
@@ -1647,9 +1670,23 @@ setup_infra_required_services() {
 
 # Hint after require_setup_infra_ready fails (copy-paste compose command).
 print_infra_recovery_hint() {
-  local profiles="--profile migration"
+  local profiles=""
   local services="dsp-db dsp-geoserver-db dsp-geoserver-exhibition dsp-geoserver-download"
 
+  if is_demo_stack_mode || is_quickstart_configured; then
+    echo ""
+    echo "Infrastructure is not ready. ./start.sh only starts backend, frontend and gateway."
+    echo "First time: run ./setup.sh (Demonstration or Real adopter)."
+    echo "After 'docker compose down' (without -v), start demonstration infrastructure again:"
+    echo ""
+    echo "  docker compose --env-file .env up -d --build ${services}"
+    echo ""
+    echo "Then run ./start.sh again."
+    echo ""
+    return 0
+  fi
+
+  profiles="--profile migration"
   if is_object_storage_stack_enabled; then
     profiles="${profiles} --profile object-storage"
   fi
@@ -1680,21 +1717,44 @@ print_infra_recovery_hint() {
 require_setup_infra_ready() {
   local svc
   local missing=false
+  local attempt=0
+  local max_attempts=30
+
+  if is_demo_stack_mode || is_quickstart_configured; then
+    info "Demonstration stack: checking DBs and GeoServers only."
+  fi
+
+  while [ "$attempt" -lt "$max_attempts" ]; do
+    missing=false
+    load_stack_service_statuses true
+    while IFS= read -r svc; do
+      [ -z "$svc" ] && continue
+      if ! is_setup_infra_service_ready "$svc"; then
+        missing=true
+        break
+      fi
+    done < <(setup_infra_required_services)
+
+    if [ "$missing" = false ]; then
+      ok "Infrastructure is running"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    if [ "$attempt" -lt "$max_attempts" ]; then
+      sleep 2
+    fi
+  done
 
   load_stack_service_statuses true
   while IFS= read -r svc; do
     [ -z "$svc" ] && continue
     if ! is_setup_infra_service_ready "$svc"; then
       error "Infrastructure service not ready: ${svc} ($(stack_service_status "$svc"))"
-      missing=true
     fi
   done < <(setup_infra_required_services)
 
-  if [ "$missing" = true ]; then
-    print_infra_recovery_hint
-    exit 1
-  fi
-  ok "Infrastructure is running"
+  print_infra_recovery_hint
+  exit 1
 }
 
 # Starts backend, frontend and gateway without compose depends_on (DBs/GeoServers).
@@ -2321,10 +2381,7 @@ is_quickstart_configured() {
   local download_active="$ROOT_DIR/config/downloads/downloadThemesConfig.json"
   local about_example="$ROOT_DIR/config/about/about-config.quickstart.json.example"
   local about_active="$ROOT_DIR/config/about/about-config.json"
-  local adopter_config="$ROOT_DIR/config/adopter/adopter-config.yaml"
-
-  [ ! -f "$adopter_config" ] &&
-    [ -f "$install_example" ] &&
+  [ -f "$install_example" ] &&
     [ -f "$install_active" ] &&
     [ -f "$map_example" ] &&
     [ -f "$map_active" ] &&
