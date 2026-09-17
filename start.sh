@@ -31,6 +31,7 @@ ensure_runtime_config_files_exist
 step_header 5 "Infrastructure (must be running)"
 
 require_setup_infra_ready
+info "Frontend (after step 6): $(dsp_public_base_url)${VITE_BASE_URL:-/dsp/}"
 
 step_header 6 "Application containers + gateway"
 

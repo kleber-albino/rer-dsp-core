@@ -2556,7 +2556,6 @@ def wizard(example: Path, active: Path, *, edit: bool = False, root: Path | None
         "Pattern for dates with time (e.g. dd/MM/yyyy HH:mm).",
         "detail screens",
     )
-    ask_object_storage(config)
 
     print("\n" + "=" * 72)
     print("Stage 4/5 — Interface")
@@ -2636,29 +2635,6 @@ def wizard(example: Path, active: Path, *, edit: bool = False, root: Path | None
     write_adopter_config(active, config, template)
     print(f"\nConfiguration saved to {active}")
     return True
-
-
-def ask_object_storage(config: dict[str, Any]) -> None:
-    """Configures the SeaweedFS object storage bundled in rer-dsp-core for pre-generated downloads."""
-    storage = config["environment"].setdefault(
-        "object_storage", copy.deepcopy(OBJECT_STORAGE_DEFAULTS)
-    )
-    print("\nObject storage (SeaweedFS) for pre-generated download files")
-    print("  The DSP ships dsp-object-storage in the core stack (real adopter installs).")
-    print(f"  Endpoint: {OBJECT_STORAGE_DEFAULTS['endpoint']}")
-    print(f"  Bucket: {OBJECT_STORAGE_DEFAULTS['bucket']} (created on startup if missing)")
-    storage.update(copy.deepcopy(OBJECT_STORAGE_DEFAULTS))
-    while True:
-        cron = ask_field(
-            "Pre-generation cron",
-            storage.get("generation_cron") or OBJECT_STORAGE_DEFAULTS["generation_cron"],
-            "Schedule of the geo file job, in a window after the migration (5 fields).",
-            "the dsp-job-geo-file-generation service",
-        )
-        if len(str(cron).split()) == 5:
-            storage["generation_cron"] = str(cron)
-            break
-        print("\n  The cron needs 5 fields (minute hour day month weekday).")
 
 
 def ask_about_page(config: dict[str, Any], about_dir: Path) -> None:

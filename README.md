@@ -99,16 +99,7 @@ Configura o adotante
 
 No wizard do `./config.sh`, L1, L2, L3 e AOI são sempre configurados; generic layers são opcionais (`etl.layers`). O `application.yaml` do job recebe `execution-jobs` derivados automaticamente (jobs estruturais sempre `true`; `layer-jobs` só quando houver generic layers).
 
-Ao final, tudo é acessível por uma única porta (default `8026`):
-
-| Serviço | URL |
-|---------|-----|
-| Frontend | http://localhost:8026/dsp/ |
-| Backend API | http://localhost:8026/dsp-backend |
-| GeoServer Exhibition | http://localhost:8026/geoserver-exhibition/web/ |
-| GeoServer Download | http://localhost:8026/geoserver-download/web/ |
-
-Detalhes de rotas e cache: [`config/Gateway/docker/README.md`](config/Gateway/docker/README.md).
+Após `./start.sh`, o frontend fica em **http://localhost:8026/dsp/** com a configuração padrão do `.env`. Rotas e cache do gateway: [`config/Gateway/docker/README.md`](config/Gateway/docker/README.md).
 
 Estrutura esperada após o setup (layout padrão):
 
