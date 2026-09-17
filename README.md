@@ -6,14 +6,12 @@ Full documentation: **[rer-dsp-docs](https://github.com/Rural-Environmental-Regi
 
 ## Prerequisites
 
-
-| Requirement                | Notes                                                         |
-| -------------------------- | ------------------------------------------------------------- |
-| Git                        | Sibling repositories can be cloned automatically when missing |
-| Docker 24+ with Compose v2 |                                                               |
-| Python 3                   | Required for `./config.sh` (real adopter only)                |
-| Bash                       | Native on Linux/macOS; on Windows use WSL2                    |
-
+| Requirement | Notes |
+|-------------|-------|
+| Git | Sibling repositories can be cloned automatically when missing |
+| Docker 24+ with Compose v2 | |
+| Python 3 | Required for `./config.sh` (real adopter only) |
+| Bash | Native on Linux/macOS; on Windows use WSL2 |
 
 On first run, `.env` is created automatically from `.env.example`.
 
@@ -27,8 +25,6 @@ cd rer-dsp-core
 Missing sibling repos (`rer-dsp-backend`, `rer-dsp-frontend`, `rer-dsp-job-data-migration`, and for real installs `rer-dsp-job-geo-file-generation`) are offered for automatic clone by the scripts.
 
 ---
-
-
 
 ## Path A — Quick demo (recommended first)
 
@@ -51,8 +47,6 @@ Choose **option 1 — Demonstration**. This starts the databases and GeoServers 
 Required after every `./setup.sh`. Brings up backend, frontend and gateway without re-running migration.
 
 ---
-
-
 
 ## Path B — Real adopter (your organization's data)
 
@@ -86,34 +80,26 @@ Details: [Full installation](https://github.com/Rural-Environmental-Registry/rer
 
 ---
 
-
-
 ## Which script when
 
-
-| Script        | Use when                                                                                                                                                             |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `./config.sh` | Real adopter only — first-time setup or after editing `adopter-config.yaml`. Regenerates files under `config/`. Rebuild with `./setup.sh` or `./start.sh` afterward. |
-| `./setup.sh`  | First install, switching demo ↔ real, or re-running migration / seed. Menu: **1** demo, **2** real adopter, **3** status/cleanup.                                    |
-| `./start.sh`  | After `./setup.sh`, or whenever you need backend + frontend + gateway running with the current configuration.                                                        |
-
+| Script | Use when |
+|--------|----------|
+| `./config.sh` | Real adopter only — first-time setup or after editing `adopter-config.yaml`. Regenerates files under `config/` (data, mappings, layers, UI, SeaweedFS credentials in `.env`). Does **not** set batch job schedules. Rebuild with `./setup.sh` or `./start.sh` afterward. |
+| `./setup.sh` | First install, switching demo ↔ real, or re-running migration / seed. Menu: **1** demo, **2** real adopter, **3** status/cleanup. For real adopter, defines **when** and **how** migration runs and the download pre-generation cron (`DSP_GEO_FILE_GENERATION_CRON` in `.env`). |
+| `./start.sh` | After `./setup.sh`, or whenever you need backend + frontend + gateway with the current configuration. Starts **only** those three services — databases, GeoServers and jobs must already be running from `./setup.sh`. Does not ask for job schedules. If you ran `docker compose down` without `-v` and `./start.sh` fails, bring infrastructure back with the `docker compose` command it prints, then run `./start.sh` again. |
 
 ---
-
-
 
 ## Access (default port 8026)
 
 All HTTP traffic goes through the gateway on a single port:
 
-
-| Service               | URL                                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------------------ |
-| Frontend              | [http://localhost:8026/dsp/](http://localhost:8026/dsp/)                                               |
-| Backend API (Swagger) | [http://localhost:8026/dsp-backend/swagger-ui.html](http://localhost:8026/dsp-backend/swagger-ui.html) |
-| GeoServer Exhibition  | [http://localhost:8026/geoserver-exhibition/web/](http://localhost:8026/geoserver-exhibition/web/)     |
-| GeoServer Download    | [http://localhost:8026/geoserver-download/web/](http://localhost:8026/geoserver-download/web/)         |
-
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:8026/dsp/ |
+| Backend API (Swagger) | http://localhost:8026/dsp-backend/swagger-ui.html |
+| GeoServer Exhibition | http://localhost:8026/geoserver-exhibition/web/ |
+| GeoServer Download | http://localhost:8026/geoserver-download/web/ |
 
 If port 8026 is in use, change `DSP_GATEWAY_HOST_PORT` and `DSP_PUBLIC_BASE_URL` in `.env`, run `./config.sh` to refresh WMS/WFS URLs (real adopter), then `./start.sh` again.
 
