@@ -92,7 +92,7 @@ Details: [Full installation](https://github.com/Rural-Environmental-Registry/rer
 
 ## Access (default port 8026)
 
-All HTTP traffic goes through the gateway on a single port:
+All HTTP traffic goes through the gateway on a single port. After `./start.sh`, the frontend is available at **http://localhost:8026/dsp/** using the default `.env` configuration.
 
 | Service | URL |
 |---------|-----|
