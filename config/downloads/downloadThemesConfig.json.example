@@ -5,7 +5,7 @@
       "code": "area_of_interest",
       "name": "Area of interest",
       "typeName": "dsp:area-of-interest",
-      "formats": ["csv"],
+      "formats": ["csv", "gpkg"],
       "enabled": true,
       "territoryFilter": {
         "strategy": "direct",

@@ -7,6 +7,7 @@ Shares the same PostGIS database as GeoServer Exhibition (`dsp-geoserver-db`). L
 ## Image
 
 - Base: `docker.osgeo.org/geoserver:3.0.0`
+- Extension: `geopkg-output` (WFS `outputFormat=gpkg`), installed in the image build
 - Build context: `rer-dsp-core/config` (`dockerfile: GeoserverDownload/docker/Dockerfile`)
 - Compose service: `dsp-geoserver-download`
 - `mapLayersConfig.json` is copied into the image at `/config/mapLayersConfig.json`

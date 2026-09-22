@@ -1892,6 +1892,10 @@ def layer_name_to_code(layer_name: str) -> str:
     return layer_name.replace("-", "_")
 
 
+# Shared with the backend Downloads screen and the geo-file job.
+DOWNLOAD_FORMATS = ["csv", "gpkg"]
+
+
 def build_download_themes_config(
     values: dict[str, Any],
     extra_layers: list[dict[str, Any]],
@@ -1905,7 +1909,7 @@ def build_download_themes_config(
             "code": "area_of_interest",
             "name": aoi_name,
             "typeName": "dsp:area-of-interest",
-            "formats": ["csv"],
+            "formats": list(DOWNLOAD_FORMATS),
             "enabled": True,
             "territoryFilter": {
                 "strategy": "direct",
@@ -1921,7 +1925,7 @@ def build_download_themes_config(
                 "code": layer_name_to_code(layer_name),
                 "name": entry["display_name"],
                 "typeName": entry["wms_id"],
-                "formats": ["csv"],
+                "formats": list(DOWNLOAD_FORMATS),
                 "enabled": True,
                 "territoryFilter": {
                     "strategy": "aoi_linked",
