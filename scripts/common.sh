@@ -862,10 +862,10 @@ require_docker() {
   ok "Docker and Docker Compose OK"
 }
 
-DSP_REPO_BACKEND_URL="https://github.com/Rural-Environmental-Registry/rer-dsp-backend.git"
-DSP_REPO_FRONTEND_URL="https://github.com/Rural-Environmental-Registry/rer-dsp-frontend.git"
-DSP_REPO_JOB_URL="https://github.com/Rural-Environmental-Registry/rer-dsp-job-data-migration.git"
-DSP_REPO_GEO_FILE_JOB_URL="https://github.com/Rural-Environmental-Registry/rer-dsp-job-geo-file-generation.git"
+DSP_REPO_BACKEND_URL="https://github.com/Rural-Environmental-Registry/dsp-backend.git"
+DSP_REPO_FRONTEND_URL="https://github.com/Rural-Environmental-Registry/dsp-frontend.git"
+DSP_REPO_JOB_URL="https://github.com/Rural-Environmental-Registry/dsp-job-data-migration.git"
+DSP_REPO_GEO_FILE_JOB_URL="https://github.com/Rural-Environmental-Registry/dsp-job-geo-file-generation.git"
 
 require_git() {
   if ! command -v git >/dev/null 2>&1; then
@@ -920,7 +920,9 @@ print_dsp_repository_preview() {
   if [ "$uses_sibling_layout" = true ]; then
     common_parent="$core_parent"
     echo "  ${common_parent}/"
-    echo "  ├── rer-dsp-core/              (already exists — you are here)"
+    local core_folder
+    core_folder="$(basename "$core_abs")"
+    echo "  ├── ${core_folder}/              (already exists — you are here)"
 
     for line in "${preview_lines[@]}"; do
       IFS='|' read -r label abs _url status <<<"$line"
@@ -1003,67 +1005,115 @@ ensure_dsp_repositories() {
   local -a missing_labels=()
   local -a missing_abs=()
   local -a missing_urls=()
+  local -a missing_env_keys=()
+  local -a missing_rels=()
 
+  # Write the chosen path to .env only when it differs from the current value.
+  _persist_dsp_repo_path() {
+    local key="$1"
+    local rel="$2"
+    local current="${!key:-}"
+
+    if [ -n "$current" ] && [ "$(resolve_path "$current")" = "$(resolve_path "$rel")" ]; then
+      return 0
+    fi
+
+    set_env_var "$key" "$rel"
+  }
+
+  # Look in the short folder, then in the repository-named folder.
+  # When both are missing, clone into the repository-named folder.
   _ensure_dsp_repo_check() {
     local label="$1"
-    local path="$2"
-    local url="$3"
-    local found_label="$4"
-    local abs
-    local status
+    local short_path="$2"
+    local long_path="$3"
+    local url="$4"
+    local found_label="$5"
+    local env_key="$6"
+    local candidate=""
+    local abs=""
+    local status=""
+    local chosen_rel=""
+    local chosen_abs=""
+    local invalid_abs=""
 
-    abs="$(resolve_path "$path")"
-    status="$(classify_dsp_repository_path "$abs")"
+    for candidate in "$short_path" "$long_path"; do
+      abs="$(resolve_path "$candidate")"
+      status="$(classify_dsp_repository_path "$abs")"
+      case "$status" in
+        ok)
+          chosen_rel="$candidate"
+          chosen_abs="$abs"
+          break
+          ;;
+        invalid)
+          if [ -z "$invalid_abs" ]; then
+            invalid_abs="$abs"
+          fi
+          ;;
+      esac
+    done
 
-    case "$status" in
-      ok)
-        ok "${found_label} found: ${abs}"
-        preview_lines+=("${label}|${abs}|${url}|ok")
-        ;;
-      invalid)
-        error "${found_label} directory exists but Dockerfile is missing: ${abs}"
-        error "Fix the path in .env or use a valid clone of ${label}."
-        exit 1
-        ;;
-      missing)
-        preview_lines+=("${label}|${abs}|${url}|missing")
-        missing_labels+=("$label")
-        missing_abs+=("$abs")
-        missing_urls+=("$url")
-        ;;
-    esac
+    if [ -n "$chosen_rel" ]; then
+      ok "${found_label} found: ${chosen_abs}"
+      preview_lines+=("${label}|${chosen_abs}|${url}|ok")
+      _persist_dsp_repo_path "$env_key" "$chosen_rel"
+      return 0
+    fi
+
+    if [ -n "$invalid_abs" ]; then
+      error "${found_label} directory exists but Dockerfile is missing: ${invalid_abs}"
+      error "Fix the path in .env or use a valid clone of ${label}."
+      exit 1
+    fi
+
+    abs="$(resolve_path "$long_path")"
+    preview_lines+=("${label}|${abs}|${url}|missing")
+    missing_labels+=("$label")
+    missing_abs+=("$abs")
+    missing_urls+=("$url")
+    missing_env_keys+=("$env_key")
+    missing_rels+=("$long_path")
   }
 
   if [ "$want_backend" = true ]; then
     _ensure_dsp_repo_check \
-      "rer-dsp-backend" \
-      "${DSP_BACKEND_PATH:-../rer-dsp-backend}" \
+      "dsp-backend" \
+      "../backend" \
+      "../dsp-backend" \
       "$DSP_REPO_BACKEND_URL" \
-      "Backend"
+      "Backend" \
+      "DSP_BACKEND_PATH"
   fi
 
   if [ "$want_frontend" = true ]; then
     _ensure_dsp_repo_check \
-      "rer-dsp-frontend" \
-      "${DSP_FRONTEND_PATH:-../rer-dsp-frontend}" \
+      "dsp-frontend" \
+      "../frontend" \
+      "../dsp-frontend" \
       "$DSP_REPO_FRONTEND_URL" \
-      "Frontend"
+      "Frontend" \
+      "DSP_FRONTEND_PATH"
   fi
 
   if [ "$want_job" = true ]; then
     _ensure_dsp_repo_check \
-      "rer-dsp-job-data-migration" \
-      "${DSP_JOB_MIGRATION_PATH:-../rer-dsp-job-data-migration}" \
+      "dsp-job-data-migration" \
+      "../job-data-migration" \
+      "../dsp-job-data-migration" \
       "$DSP_REPO_JOB_URL" \
-      "Migration job"
+      "Migration job" \
+      "DSP_JOB_MIGRATION_PATH"
   fi
 
   if [ "$want_geo_file_job" = true ]; then
     _ensure_dsp_repo_check \
-      "rer-dsp-job-geo-file-generation" \
-      "${DSP_JOB_GEO_FILE_GENERATION_PATH:-../rer-dsp-job-geo-file-generation}" \
+      "dsp-job-geo-file-generation" \
+      "../job-geo-file-generation" \
+      "../dsp-job-geo-file-generation" \
       "$DSP_REPO_GEO_FILE_JOB_URL" \
-      "Geo file generation job"
+      "Geo file generation job" \
+      "DSP_JOB_GEO_FILE_GENERATION_PATH"
   fi
 
   if [ "${#missing_labels[@]}" -eq 0 ]; then
@@ -1097,6 +1147,7 @@ ensure_dsp_repositories() {
       exit 1
     fi
     ok "${missing_labels[$i]} cloned: ${dest}"
+    _persist_dsp_repo_path "${missing_env_keys[$i]}" "${missing_rels[$i]}"
   done
 }
 

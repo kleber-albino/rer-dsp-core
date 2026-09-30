@@ -18,11 +18,11 @@ On first run, `.env` is created automatically from `.env.example`.
 ## Clone
 
 ```bash
-git clone https://github.com/Rural-Environmental-Registry/rer-dsp-core.git
-cd rer-dsp-core
+git clone https://github.com/Rural-Environmental-Registry/dsp-core.git
+cd dsp-core
 ```
 
-Missing sibling repos (`rer-dsp-backend`, `rer-dsp-frontend`, `rer-dsp-job-data-migration`, and for real installs `rer-dsp-job-geo-file-generation`) are offered for automatic clone by the scripts.
+If a sibling repository is missing, `./config.sh`, `./setup.sh`, and `./start.sh` offer to clone it. They look first in the short folder (`backend`, `frontend`, `job-data-migration`, `job-geo-file-generation`) and, if the code is not there, in the repository folder (`dsp-backend`, `dsp-frontend`, `dsp-job-data-migration`, `dsp-job-geo-file-generation`). When both are missing, the download creates the repository-named folder.
 
 ---
 

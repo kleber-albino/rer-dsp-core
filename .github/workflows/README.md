@@ -21,8 +21,9 @@ pushes them to GHCR.
 
 ## REQUIRED SETUP — sibling-repo checkout token
 
-The workflow checks out three **private** sibling repos (`rer-dsp-backend`,
-`rer-dsp-frontend`, `rer-dsp-job-data-migration`). The default `GITHUB_TOKEN` is
+The workflow checks out three **private** sibling repos (`dsp-backend`,
+`dsp-frontend`, `dsp-job-data-migration`) into the short folders next to `core`
+(`backend`, `frontend`, `job-data-migration`). The default `GITHUB_TOKEN` is
 scoped to **this repo only** and cannot read them. You MUST provide a token with
 `contents:read` on those repos as the secret **`DSP_SIBLING_REPOS_TOKEN`**:
 
