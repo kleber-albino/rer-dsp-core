@@ -135,3 +135,5 @@ If port 8026 is in use, change `DSP_GATEWAY_HOST_PORT` and `DSP_PUBLIC_BASE_URL`
 ## License
 
 [GNU General Public License v3.0](LICENSE)
+
+<small><strong>Copyright © 2026 Government of Brazil — Ministry of Management and Innovation in Public Services</strong></small>
