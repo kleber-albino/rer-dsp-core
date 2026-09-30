@@ -70,7 +70,7 @@ downloads:
 
 ## How to instantiate the DSP?
 
-1. **Get the code** — Access the [official repository](https://github.com/Rural-Environmental-Registry/rer-dsp-core) and use the available DSP version as your starting point.
+1. **Get the code** — Access the [official repository](https://github.com/Rural-Environmental-Registry/dsp-core) and use the available DSP version as your starting point.
 2. **Prepare the data** — Organize territorial data, registration units, attributes, and geographic themes for your instance.
 3. **Configure the instance** — Run `./config.sh` and follow the guided wizard to define filters, territorial levels, KPIs, and layers. The script generates `config/adopter/adopter-config.yaml` and the instance JSON files.
 4. **Publish and evolve** — Deploy your instance, connect the required services, and share improvements with the community.
@@ -91,4 +91,4 @@ Yes. Run `./config.sh` to configure KPIs through the guided wizard; calculated f
 
 ### How can I contribute?
 
-Contributions are made through the [official GitHub repository](https://github.com/Rural-Environmental-Registry/rer-dsp-core). Report issues, propose features, and submit improvements via pull request.
+Contributions are made through the [official GitHub repository](https://github.com/Rural-Environmental-Registry/dsp-core). Report issues, propose features, and submit improvements via pull request.

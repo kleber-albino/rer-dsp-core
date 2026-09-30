@@ -2,7 +2,7 @@
 
 The **DSP (Data Sharing Platform)** is a web platform for sharing, exploring and publishing geospatial environmental data. **This repository** is the operational entry point: it prepares databases, GeoServer, the nginx gateway and adopter configuration, and orchestrates the other DSP modules via Docker Compose.
 
-Full documentation: **[rer-dsp-docs](https://github.com/Rural-Environmental-Registry/rer-dsp-docs)**
+Full documentation: **[dsp-docs](https://github.com/Rural-Environmental-Registry/dsp-docs)**
 
 ## Prerequisites
 
@@ -104,7 +104,7 @@ Choose **option 2 — Real adopter**. Defines when and how the first migration r
 
 Required after setup. Use `./start.sh` again on later runs when the stack is already configured.
 
-Details: [Full installation](https://github.com/Rural-Environmental-Registry/rer-dsp-docs/blob/develop/docs/guides/full-installation.md) in rer-dsp-docs.
+Details: [Full installation](https://github.com/Rural-Environmental-Registry/dsp-docs/blob/develop/docs/guides/full-installation.md) in rer-dsp-docs.
 
 ---
 

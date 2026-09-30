@@ -1008,17 +1008,25 @@ ensure_dsp_repositories() {
   local -a missing_env_keys=()
   local -a missing_rels=()
 
-  # Write the chosen path to .env only when it differs from the current value.
+  # Write the chosen path without quotes. The Python reader uses the raw .env line.
   _persist_dsp_repo_path() {
     local key="$1"
     local rel="$2"
-    local current="${!key:-}"
+    local env_file="${ROOT_DIR:-.}/.env"
+    local line=""
+    local raw=""
 
-    if [ -n "$current" ] && [ "$(resolve_path "$current")" = "$(resolve_path "$rel")" ]; then
+    if [ -f "$env_file" ]; then
+      line="$(grep -m1 "^${key}=" "$env_file" || true)"
+      raw="${line#*=}"
+    fi
+
+    if [ "$raw" = "$rel" ]; then
+      export "${key}=${rel}"
       return 0
     fi
 
-    set_env_var "$key" "$rel"
+    set_env_var_plain "$key" "$rel"
   }
 
   # Look in the short folder, then in the repository-named folder.
@@ -1248,6 +1256,31 @@ migrate_dotenv_to_gateway() {
     warn ".env updated for the gateway (single entry point)."
     warn "Run ./config.sh to regenerate the WMS/WFS URLs in the map and download configs."
   fi
+}
+
+set_env_var_plain() {
+  local key="$1"
+  local value="$2"
+  local env_file="${ROOT_DIR:-.}/.env"
+
+  if [ ! -f "$env_file" ]; then
+    error ".env not found — run ensure_dotenv first."
+    exit 1
+  fi
+
+  if grep -q "^${key}=" "$env_file"; then
+    local tmp
+    tmp="$(mktemp)"
+    awk -v k="$key" -v v="$value" '
+      $0 ~ "^" k "=" { print k "=" v; next }
+      { print }
+    ' "$env_file" >"$tmp"
+    mv "$tmp" "$env_file"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >>"$env_file"
+  fi
+
+  export "${key}=${value}"
 }
 
 set_env_var() {
