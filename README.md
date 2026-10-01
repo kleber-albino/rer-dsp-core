@@ -1,136 +1,84 @@
 # rer-dsp-core
 
-The **DSP (Data Sharing Platform)** is a web platform for sharing, exploring and publishing geospatial environmental data. **This repository** is the operational entry point: it prepares databases, GeoServer, the nginx gateway and adopter configuration, and orchestrates the other DSP modules via Docker Compose.
+> [!IMPORTANT]
+> This repository is one module of the **DSP (Data Sharing Platform)**, part of the RER ecosystem. Full project documentation lives in **[dsp-docs](https://github.com/Rural-Environmental-Registry/dsp-docs)**. The information below covers this module only, and only briefly.
+>
+> **[Go to the DSP documentation](https://rural-environmental-registry.github.io/dsp-docs)**
 
-Full documentation: **[dsp-docs](https://github.com/Rural-Environmental-Registry/dsp-docs)**
+## Where this module fits in the DSP
 
-## Prerequisites
+```mermaid
+flowchart LR
+  browser["BROWSER<br/>Public map consultation."]
+  gw["GATEWAY<br/>nginx · single HTTP entry.<br/>/dsp/ · /dsp-backend/ · GeoServers."]
 
-| Requirement | Notes |
-|-------------|-------|
-| Git | Sibling repositories can be cloned automatically when missing |
-| Docker 24+ with Compose v2 | |
-| Python 3 | Required for `./config.sh` (real adopter only) |
-| Bash | Native on Linux/macOS; on Windows use WSL2 |
+  srcDb[("YOUR DATABASE<br/>Your organization's DB to migrate from.<br/>Source for the DSP.")]
+  jobMig["JOB-DATA-MIGRATION<br/>Spring Batch ETL.<br/>source → dsp-db + geoserver-db."]
+  jobGeo["JOB-GEO-FILE-GENERATION<br/>Pre-generates download files."]
 
-On first run, `.env` is created automatically from `.env.example`.
+  dspDb[("DSP DB<br/>Operational: business + bbox/centroid.")]
+  gsDb[("GEOSERVER DB<br/>Full geometry dsp.*<br/>Read by both GeoServers.")]
+  objStor[("OBJECT STORAGE<br/>SeaweedFS S3.<br/>")]
 
-## Clone
+  be["DSP BACKEND<br/>REST API and business rules."]
+  fe["DSP FRONTEND<br/>Web platform UI.<br/>Consultation, maps, sharing."]
 
-```bash
-git clone https://github.com/Rural-Environmental-Registry/dsp-core.git
-cd dsp-core
+  gsEx["GEOSERVER-EXHIBITION<br/>Publishes layers for viewing.<br/>WMS/WFS map service."]
+  gsDl["GEOSERVER-DOWNLOAD<br/>WFS for download export.<br/>Used by the backend."]
+
+  subgraph thisRepo ["This repository"]
+    core["CORE<br/>CONFIG · SETUP · START.<br/>Prepares DBs and orchestrates modules."]
+  end
+
+  browser --> gw
+  gw -->|/dsp/| fe
+  gw -->|/dsp-backend/| be
+  gw -->|/geoserver-exhibition/| gsEx
+
+  jobMig -->|read| srcDb
+  jobMig -->|"business + bbox/centroid"| dspDb
+  jobMig -->|"full geom"| gsDb
+  core -.config/schema/build.-> jobMig
+  core -.-> jobGeo
+  core -.-> dspDb
+  core -.-> gsDb
+  core -.-> objStor
+  core -.-> gw
+  core -.-> be
+  core -.-> fe
+  core -.-> gsEx
+  core -.-> gsDl
+
+  dspDb --> be
+  gsDb --> gsEx
+  gsDb --> gsDl
+  gsDb --> jobGeo
+  jobGeo -->|"pre-generated CSV"| objStor
+  be -->|WFS downloads| gsDl
+  be -->|CSV when available| objStor
+
+  classDef plain fill:#ffffff,color:#334155,stroke:#cbd5e1,stroke-width:1px
+  classDef here fill:#fef08a,color:#713f12,stroke:#ca8a04,stroke-width:2px
+
+  class browser,gw,srcDb,jobMig,jobGeo,dspDb,gsDb,objStor,be,fe,gsEx,gsDl plain
+  class core here
+
+  style thisRepo fill:#fef9c3,stroke:#ca8a04,stroke-width:2px,color:#713f12
 ```
 
-If a sibling repository is missing, `./config.sh`, `./setup.sh`, and `./start.sh` offer to clone it. They look first in the short folder (`backend`, `frontend`, `job-data-migration`, `job-geo-file-generation`) and, if the code is not there, in the repository folder (`dsp-backend`, `dsp-frontend`, `dsp-job-data-migration`, `dsp-job-geo-file-generation`). When both are missing, the download creates the repository-named folder.
+## Purpose
 
----
+Operational entry point of the DSP. It prepares databases, GeoServer, the nginx gateway and adopter configuration, and orchestrates the other modules via Docker Compose.
 
-## Path 0 — One-command install (fastest demo)
+## Responsibilities
 
-For a quick demo using **published GHCR images** (no source build, no sibling repos):
+- Prepare databases, GeoServers, the gateway and object storage
+- Generate adopter configuration (`./config.sh`)
+- Orchestrate setup and startup of the other DSP modules (`./setup.sh`, `./start.sh`)
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Rural-Environmental-Registry/dsp-core/main/install.sh | sh
-# or, from a clone:
-./install.sh
-```
+## Technologies
 
-`install.sh` checks Docker/Compose/git/openssl, clones only `dsp-core` (~1 MB, for the
-demo seed and config templates), generates `.env` with random passwords and a
-`docker-compose.release.yml` that pulls the `dsp-*` images from GHCR, applies the
-quickstart seed to both databases, and brings the full stack up in demo mode.
-
-It auto-detects the container DNS resolver (Docker `127.0.0.11`, podman and others
-differ) so the gateway resolves upstreams on any runtime.
-
-When done: open `http://localhost:8026/dsp/`. Manage with
-`docker compose -f docker-compose.release.yml {logs -f | down | down -v}`.
-
-Environment overrides: `DSP_VERSION`, `DSP_DIR`, `DSP_PORT`, `DSP_REGISTRY`.
-
-> Use `install.sh` for a demo from published images. Use `./config.sh` + `./setup.sh`
-> (Path B) for a real adopter that migrates data from a source database.
-
----
-
-## Path A — Quick demo (recommended first)
-
-Built-in Brazil seed. No external database, no `./config.sh`.
-
-**1. Prepare infrastructure and demo data**
-
-```bash
-./setup.sh
-```
-
-Choose **option 1 — Demonstration**. This starts the databases and GeoServers and loads the synthetic seed. It does **not** start the backend, frontend or gateway.
-
-**2. Start the application**
-
-```bash
-./start.sh
-```
-
-Required after every `./setup.sh`. Brings up backend, frontend and gateway without re-running migration.
-
----
-
-## Path B — Real adopter (your organization's data)
-
-Requires a JDBC source database and the configuration wizard.
-
-**1. Configure the adopter**
-
-```bash
-./config.sh
-```
-
-Wizard: source database, territorial hierarchy (L1/L2/L3), area of interest, optional layers, UI labels and KPIs. Does **not** set batch job schedules.
-
-**2. Prepare infrastructure and run migration**
-
-```bash
-./setup.sh
-```
-
-Choose **option 2 — Real adopter**. Defines when and how the first migration runs and the download pre-generation schedule.
-
-**3. Start the application**
-
-```bash
-./start.sh
-```
-
-Required after setup. Use `./start.sh` again on later runs when the stack is already configured.
-
-Details: [Full installation](https://github.com/Rural-Environmental-Registry/dsp-docs/blob/develop/docs/guides/full-installation.md) in rer-dsp-docs.
-
----
-
-## Which script when
-
-| Script | Use when |
-|--------|----------|
-| `./install.sh` | Fastest demo from published GHCR images. One command, no source build, no sibling repos. Generates `.env` + `docker-compose.release.yml`, seeds both databases, starts the full stack in demo mode. Env overrides: `DSP_VERSION`, `DSP_DIR`, `DSP_PORT`, `DSP_REGISTRY`. |
-| `./config.sh` | Real adopter only — first-time setup or after editing `adopter-config.yaml`. Regenerates files under `config/` (data, mappings, layers, UI, SeaweedFS credentials in `.env`). Does **not** set batch job schedules. Rebuild with `./setup.sh` or `./start.sh` afterward. |
-| `./setup.sh` | First install, switching demo ↔ real, or re-running migration / seed. Menu: **1** demo, **2** real adopter, **3** status/cleanup. For real adopter, defines **when** and **how** migration runs and the download pre-generation cron (`DSP_GEO_FILE_GENERATION_CRON` in `.env`). |
-| `./start.sh` | After `./setup.sh`, or whenever you need backend + frontend + gateway with the current configuration. Starts **only** those three services — databases, GeoServers and jobs must already be running from `./setup.sh`. Does not ask for job schedules. If you ran `docker compose down` without `-v` and `./start.sh` fails, bring infrastructure back with the `docker compose` command it prints, then run `./start.sh` again. |
-
----
-
-## Access (default port 8026)
-
-All HTTP traffic goes through the gateway on a single port. After `./start.sh`, the frontend is available at **http://localhost:8026/dsp/** using the default `.env` configuration.
-
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:8026/dsp/ |
-| Backend API (Swagger) | http://localhost:8026/dsp-backend/swagger-ui.html |
-| GeoServer Exhibition | http://localhost:8026/geoserver-exhibition/web/ |
-| GeoServer Download | http://localhost:8026/geoserver-download/web/ |
-
-If port 8026 is in use, change `DSP_GATEWAY_HOST_PORT` and `DSP_PUBLIC_BASE_URL` in `.env`, run `./config.sh` to refresh WMS/WFS URLs (real adopter), then `./start.sh` again.
+Docker Compose, Bash, Python 3.
 
 ## License
 
