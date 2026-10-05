@@ -30,7 +30,6 @@ edit these by hand:
 - `config/map/mapLayersConfig.json`
 - `config/downloads/downloadThemesConfig.json`
 - `config/Job-Data-Migration/application/application.yaml`
-- `config/Job-Geo-File-Generation/application/application.yaml`
 
 Change `config/adopter/adopter-config.yaml` (wizard or editor) and reapply
 `./config.sh`. The wizard does not set batch job schedules. Cron values in

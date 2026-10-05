@@ -40,8 +40,13 @@ the flags. A failed JAR does not stop the continuous container.
 
 ## Configuration
 
-`./config.sh` writes the SeaweedFS endpoint, bucket, region, credentials and path-style to
-`application/application.yaml` and `DSP_OBJECT_STORAGE_*` in `.env`.
+`./config.sh` writes `DSP_OBJECT_STORAGE_*` to `.env` (same keys as the backend). Compose
+passes them to `dsp-job-geo-file-generation` together with `SPRING_DATASOURCE_*` for the three
+JDBC pools. Spring defaults live in the job JAR (`application.properties`).
+
+The image bakes `downloadThemesConfig.json` into `/config` at build time. Rebuild the job
+image after `./config.sh` when download themes change. Object storage changes usually need
+only `docker compose up -d` (recreate) with the updated `.env`.
 
 `DSP_GEO_FILE_GENERATION_CRON` is set in `./setup.sh` (living source or deferred + re-sync), not in `./config.sh`.
 `DSP_GEO_FILE_GENERATION_RECURRING=false` skips the continuous geo container (one-time or wait-for-first-load).
@@ -71,4 +76,4 @@ DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once docker compose --env-file .env --pro
 
 Logs: `docker logs dsp-job-geo-file-generation` (same container name as scheduled/wait modes).
 
-The image copies `application.yaml`, `downloadThemesConfig.json` and the entrypoint at build time.
+The image copies `downloadThemesConfig.json` and the entrypoint at build time.

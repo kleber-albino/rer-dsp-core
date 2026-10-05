@@ -2906,30 +2906,9 @@ def validate_job_migration_path(root: Path) -> None:
         )
 
 
-def write_geo_file_generation_config(root: Path, values: dict[str, Any]) -> dict[str, Any]:
-    """Generates the runtime YAML of the pre-generation job from the adopter values.
-
-    The connection details also go to .env, because Compose passes them to the backend,
-    which reads the same bucket.
-    """
-    storage = object_storage_settings(values)
-    example = root / "config/Job-Geo-File-Generation/application/application.yaml.example"
-    document = yaml.safe_load(example.read_text(encoding="utf-8"))
-    document["dsp"]["object-storage"].update(
-        {
-            "endpoint": storage["endpoint"],
-            "region": storage["region"],
-            "bucket": storage["bucket"],
-            "access-key": storage["access_key"],
-            "secret-key": storage["secret_key"],
-            "path-style-access": storage["path_style_access"],
-        }
-    )
-    document["execution-jobs"]["geo-file-generation-job"] = True
-    output = root / "config/Job-Geo-File-Generation/application/application.yaml"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(dump_yaml(document), encoding="utf-8")
-    return storage
+def geo_file_generation_object_storage(values: dict[str, Any]) -> dict[str, Any]:
+    """Object storage settings for the geo-file job (.env and Compose — not a generated YAML)."""
+    return object_storage_settings(values)
 
 
 def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
@@ -3164,7 +3143,7 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
     output = root / "config/Job-Data-Migration/application/application.yaml"
     output.write_text(dump_yaml(migration), encoding="utf-8")
 
-    storage = write_geo_file_generation_config(root, values)
+    storage = geo_file_generation_object_storage(values)
     replace_env(root / ".env", values)
     if not quiet:
         print("Configuration files generated successfully.")
