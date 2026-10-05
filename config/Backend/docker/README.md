@@ -9,7 +9,7 @@ Compose injects `./config` at build time (`additional_contexts: dsp_config`). Th
 - `config/installation/installation-config.json` → `/config/installation-config.json`
 - `config/map/mapLayersConfig.json` → `/config/mapLayersConfig.json`
 - `config/downloads/downloadThemesConfig.json` → `/config/downloadThemesConfig.json`
-- `config/about/` (about-config.json + tab Markdown files) → `/config/about/`
+- `config/about/about-config.json` and only the Markdown files listed in its `tabs[].file` → `/config/about/` (other `.md` files in the host folder are not copied)
 
 If the active file is not on the host yet, the build uses the versioned `.example`.
 

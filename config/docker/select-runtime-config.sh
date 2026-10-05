@@ -24,30 +24,54 @@ pick() {
   fi
 }
 
+copy_about_markdown() {
+  a_src="$1"
+  a_dest="$2"
+  file_name="$3"
+
+  case "$file_name" in
+    */* | "" | *"~"*) die "invalid about tab file name: $file_name" ;;
+  esac
+  base=$(basename "$file_name")
+  if [ "$base" != "$file_name" ]; then
+    die "invalid about tab file name: $file_name"
+  fi
+
+  if [ -f "$a_src/$base" ]; then
+    cp "$a_src/$base" "$a_dest/$base"
+    return 0
+  fi
+
+  example="$a_src/${base}.example"
+  if [ -f "$example" ]; then
+    case "$example" in
+      *.quickstart.md.example) ;;
+      *)
+        cp "$example" "$a_dest/$base"
+        return 0
+        ;;
+    esac
+  fi
+
+  die "missing $base (and ${base}.example) in $a_src for about-config.json tab"
+}
+
 sync_about() {
   a_src="$1"
   a_dest="$2"
   mkdir -p "$a_dest"
   pick "$a_src" "about-config.json" "$a_dest/about-config.json"
 
-  for f in "$a_src"/*.md; do
-    [ -f "$f" ] || continue
-    case "$f" in
-      *.example) continue ;;
-    esac
-    cp "$f" "$a_dest/"
-  done
+  if ! command -v jq >/dev/null 2>&1; then
+    die "jq is required for the about command"
+  fi
 
-  for f in "$a_src"/*.md.example; do
-    [ -f "$f" ] || continue
-    case "$f" in
-      *.quickstart.md.example) continue ;;
-    esac
-    base=$(basename "$f" .example)
-    if [ ! -f "$a_dest/$base" ]; then
-      cp "$f" "$a_dest/$base"
-    fi
-  done
+  while IFS= read -r file_name; do
+    [ -n "$file_name" ] || continue
+    copy_about_markdown "$a_src" "$a_dest" "$file_name"
+  done <<EOF
+$(jq -r '.tabs[]?.file // empty' "$a_dest/about-config.json")
+EOF
 }
 
 cmd="${1:-}"
