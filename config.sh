@@ -13,9 +13,12 @@ APPLY="$ROOT_DIR/scripts/apply_adopter_config.py"
 
 print_config_rebuild_hint() {
   echo ""
-  echo "Operational files were written under config/."
+  echo "Operational files were written in sibling repositories:"
+  echo "  - dsp-backend/config/"
+  echo "  - dsp-job-data-migration/config/"
+  echo "  - dsp-job-geo-file-generation/config/"
   echo "They are copied into Docker images on the next build."
-  echo "Run ./setup.sh (infrastructure) and rebuild affected images; then ./start.sh for the application stack."
+  echo "Run ./setup.sh or ./start.sh so containers pick up this configuration."
   echo ""
 }
 

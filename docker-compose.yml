@@ -56,7 +56,7 @@ services:
       context: ${DSP_JOB_MIGRATION_PATH:-../job-data-migration}
       dockerfile: Dockerfile
       additional_contexts:
-        dsp_config: ./config
+        dsp_core_infra: ./config
       network: host
     container_name: dsp-job-migration
     profiles:
@@ -138,8 +138,6 @@ services:
     build:
       context: ${DSP_JOB_GEO_FILE_GENERATION_PATH:-../job-geo-file-generation}
       dockerfile: Dockerfile
-      additional_contexts:
-        dsp_config: ./config
       network: host
     container_name: dsp-job-geo-file-generation
     profiles:
@@ -186,8 +184,6 @@ services:
     build:
       context: ${DSP_BACKEND_PATH:-../backend}
       dockerfile: Dockerfile
-      additional_contexts:
-        dsp_config: ./config
       args:
         DSP_BACKEND_PROJECT_NAME: dsp-backend
         DSP_BACKEND_VERSION: 0.0.1-SNAPSHOT
@@ -226,6 +222,8 @@ services:
     build:
       context: ./config
       dockerfile: GeoserverExhibition/docker/Dockerfile
+      additional_contexts:
+        backend_config: ${DSP_BACKEND_PATH:-../backend}/config
       network: host
     container_name: dsp-geoserver-exhibition
     restart: unless-stopped
@@ -274,6 +272,8 @@ services:
     build:
       context: ./config
       dockerfile: GeoserverDownload/docker/Dockerfile
+      additional_contexts:
+        backend_config: ${DSP_BACKEND_PATH:-../backend}/config
       network: host
     container_name: dsp-geoserver-download
     restart: unless-stopped

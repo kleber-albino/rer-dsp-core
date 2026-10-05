@@ -35,7 +35,7 @@ info "Frontend (after step 6): $(dsp_public_base_url)${VITE_BASE_URL:-/dsp/}"
 
 step_header 6 "Application containers + gateway"
 
-MIGRATION_CONFIG="$ROOT_DIR/config/Job-Data-Migration/application/application.yaml"
+MIGRATION_CONFIG="$(dsp_migration_config_dir)/application/application.yaml"
 start_geoserver_exhibition "up" "$MIGRATION_CONFIG"
 start_geoserver_download "up"
 

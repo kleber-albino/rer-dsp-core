@@ -161,6 +161,50 @@ def unquote_dotenv_value(value: str) -> str:
     return value
 
 
+def resolve_sibling_repo(root: Path, env_key: str, default: str) -> Path:
+    raw = read_dotenv_value(root / ".env", env_key, default=default)
+    path = Path(str(raw))
+    if not path.is_absolute():
+        path = (root / path).resolve()
+    else:
+        path = path.resolve()
+    return path
+
+
+def component_config_paths(root: Path) -> dict[str, Path]:
+    backend = resolve_sibling_repo(root, "DSP_BACKEND_PATH", "../backend")
+    migration = resolve_sibling_repo(root, "DSP_JOB_MIGRATION_PATH", "../job-data-migration")
+    geo_file = resolve_sibling_repo(
+        root, "DSP_JOB_GEO_FILE_GENERATION_PATH", "../job-geo-file-generation"
+    )
+    return {
+        "backend": backend / "config",
+        "migration_app": migration / "config/application",
+        "migration_map": migration / "config/map",
+        "geo_downloads": geo_file / "config/downloads",
+    }
+
+
+def validate_sibling_repo(root: Path, env_key: str, default: str, label: str) -> Path:
+    path = resolve_sibling_repo(root, env_key, default)
+    dockerfile = path / "Dockerfile"
+    if not dockerfile.is_file():
+        raise ValueError(
+            f"{label} repository not found at: {path} "
+            f"(expected Dockerfile). Clone the sibling repo or set {env_key} in .env."
+        )
+    return path
+
+
+def sync_operational_copies(
+    map_file: Path, download_file: Path, paths: dict[str, Path]
+) -> None:
+    paths["migration_map"].mkdir(parents=True, exist_ok=True)
+    shutil.copy2(map_file, paths["migration_map"] / "mapLayersConfig.json")
+    paths["geo_downloads"].mkdir(parents=True, exist_ok=True)
+    shutil.copy2(download_file, paths["geo_downloads"] / "downloadThemesConfig.json")
+
+
 def read_dotenv_value(env_file: Path, key: str, default: str = "") -> str:
     if not env_file.is_file():
         return default
@@ -2886,24 +2930,17 @@ def object_storage_settings(values: dict[str, Any]) -> dict[str, Any]:
     return settings
 
 
-def validate_job_migration_path(root: Path) -> None:
-    raw = read_dotenv_value(
-        root / ".env",
-        "DSP_JOB_MIGRATION_PATH",
-        default="../rer-dsp-job-data-migration",
+def validate_component_repositories(root: Path) -> None:
+    validate_sibling_repo(root, "DSP_BACKEND_PATH", "../backend", "Backend")
+    validate_sibling_repo(
+        root, "DSP_JOB_MIGRATION_PATH", "../job-data-migration", "Migration job"
     )
-    path = Path(str(raw))
-    if not path.is_absolute():
-        path = (root / path).resolve()
-    else:
-        path = path.resolve()
-    dockerfile = path / "Dockerfile"
-    if not dockerfile.is_file():
-        raise ValueError(
-            f"Migration job repository not found at: {path} "
-            f"(expected Dockerfile). Clone dsp-job-data-migration "
-            f"or set DSP_JOB_MIGRATION_PATH in .env."
-        )
+    validate_sibling_repo(
+        root,
+        "DSP_JOB_GEO_FILE_GENERATION_PATH",
+        "../job-geo-file-generation",
+        "Geo file generation job",
+    )
 
 
 def geo_file_generation_object_storage(values: dict[str, Any]) -> dict[str, Any]:
@@ -2915,7 +2952,8 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
     example = root / "config/adopter/adopter-config.yaml.example"
     template = yaml.safe_load(example.read_text(encoding="utf-8"))
     values = yaml.safe_load(active.read_text(encoding="utf-8"))
-    validate_job_migration_path(root)
+    paths = component_config_paths(root)
+    validate_component_repositories(root)
     ensure_fixed_aoi_area_column(values)
     sync_aoi_area_unit_installation(values)
     theme_count = get(values, "installation", "kpis", "theme_count", default=0)
@@ -2975,7 +3013,7 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
             )
     write_adopter_config(active, values, template)
     installation = json.loads(
-        (root / "config/installation/installation-config.json.example").read_text(
+        (paths["backend"] / "installation/installation-config.json.example").read_text(
             encoding="utf-8"
         )
     )
@@ -3026,13 +3064,14 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
         "date_time", installation["formats"]["dateTime"]
     )
     installation["map"] = map_initial_view
-    install_file = root / "config/installation/installation-config.json"
+    install_file = paths["backend"] / "installation/installation-config.json"
+    install_file.parent.mkdir(parents=True, exist_ok=True)
     install_file.write_text(
         json.dumps(installation, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
 
     layers = json.loads(
-        (root / "config/map/mapLayersConfig.json.example").read_text(encoding="utf-8")
+        (paths["backend"] / "map/mapLayersConfig.json.example").read_text(encoding="utf-8")
     )
     layer_values = get(values, "map", "layers", default={})
     layer_names = {
@@ -3063,11 +3102,12 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
         if group["key"] in ("dt", "ird"):
             group["name"] = get(values, "map", "group_names", group_key, default=group["name"])
     append_extra_layers_to_map(layers, values, extra_layers)
-    map_file = root / "config/map/mapLayersConfig.json"
+    map_file = paths["backend"] / "map/mapLayersConfig.json"
+    map_file.parent.mkdir(parents=True, exist_ok=True)
     map_file.write_text(json.dumps(layers, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     download_themes = build_download_themes_config(values, extra_layers)
-    download_dir = root / "config/downloads"
+    download_dir = paths["backend"] / "downloads"
     download_dir.mkdir(parents=True, exist_ok=True)
     download_file = root / "config/downloads/downloadThemesConfig.json"
     download_file.write_text(
@@ -3075,13 +3115,15 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
         encoding="utf-8",
     )
 
-    about_config = build_about_config(values, root / "config/about")
-    about_file = root / "config/about/about-config.json"
+    about_dir = paths["backend"] / "about"
+    about_config = build_about_config(values, about_dir)
+    about_file = about_dir / "about-config.json"
+    about_dir.mkdir(parents=True, exist_ok=True)
     about_file.write_text(
         json.dumps(about_config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
 
-    migration_example = root / "config/Job-Data-Migration/application/application.yaml.example"
+    migration_example = paths["migration_app"] / "application.yaml.example"
     migration = yaml.safe_load(migration_example.read_text(encoding="utf-8"))
     etl = get(values, "etl", default={})
     for name in ("level1", "level2", "level3"):
@@ -3140,8 +3182,11 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
     migration["execution-jobs"]["kpi-job"] = True
     layer_jobs_enabled = bool(extra_layers)
     migration["execution-jobs"]["layer-jobs"] = layer_jobs_enabled
-    output = root / "config/Job-Data-Migration/application/application.yaml"
+    output = paths["migration_app"] / "application.yaml"
+    paths["migration_app"].mkdir(parents=True, exist_ok=True)
     output.write_text(dump_yaml(migration), encoding="utf-8")
+
+    sync_operational_copies(map_file, download_file, paths)
 
     storage = geo_file_generation_object_storage(values)
     replace_env(root / ".env", values)

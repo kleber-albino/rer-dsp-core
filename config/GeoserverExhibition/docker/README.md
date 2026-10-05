@@ -9,7 +9,7 @@ Downloads (CSV/WFS export) use a separate GeoServer — see `config/GeoserverDow
 - Base: `docker.osgeo.org/geoserver:3.0.0`
 - Build context: `rer-dsp-core/config` (`dockerfile: GeoserverExhibition/docker/Dockerfile`)
 - Compose service: `dsp-geoserver-exhibition`
-- `mapLayersConfig.json` is copied into the image at `/config/mapLayersConfig.json`
+- `mapLayersConfig.json` is copied from `dsp-backend/config/map/` into the image at `/config/mapLayersConfig.json` (Compose `backend_config` context)
 
 ## Defaults
 

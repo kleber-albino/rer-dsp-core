@@ -3,7 +3,7 @@ name: Build and Push DSP Docker Images
 # Centralized CI for the whole DSP stack (approach A).
 # dsp-core is the build orchestrator: it checks out the sibling repos into the
 # paths that docker-compose expects (../backend, etc.), builds every image
-# via `docker compose build` (which resolves additional_contexts=dsp_config and the
+# via `docker compose build` (which resolves additional_contexts such as backend_config and the
 # network:host GeoServer builds), then retags the local images and pushes them to
 # GHCR. Sibling repos do not need their own CI — the config lives here in core.
 

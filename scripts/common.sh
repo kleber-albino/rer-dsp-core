@@ -85,6 +85,43 @@ resolve_path() {
   realpath -m "$resolved"
 }
 
+dsp_sibling_repo_path() {
+  local env_key="$1"
+  local default_rel="$2"
+  local from_env="${!env_key:-}"
+  if [ -n "$from_env" ]; then
+    resolve_path "$from_env"
+  else
+    resolve_path "$default_rel"
+  fi
+}
+
+dsp_backend_config_dir() {
+  echo "$(dsp_sibling_repo_path DSP_BACKEND_PATH ../backend)/config"
+}
+
+dsp_migration_config_dir() {
+  echo "$(dsp_sibling_repo_path DSP_JOB_MIGRATION_PATH ../job-data-migration)/config"
+}
+
+dsp_geo_file_config_dir() {
+  echo "$(dsp_sibling_repo_path DSP_JOB_GEO_FILE_GENERATION_PATH ../job-geo-file-generation)/config"
+}
+
+# Copies map/download JSON from backend config into job repositories (same as apply_adopter_config).
+sync_job_config_copies() {
+  local backend_config
+  backend_config="$(dsp_backend_config_dir)"
+  local migration_config
+  migration_config="$(dsp_migration_config_dir)"
+  local geo_config
+  geo_config="$(dsp_geo_file_config_dir)"
+
+  mkdir -p "$migration_config/map" "$geo_config/downloads"
+  cp "$backend_config/map/mapLayersConfig.json" "$migration_config/map/mapLayersConfig.json"
+  cp "$backend_config/downloads/downloadThemesConfig.json" "$geo_config/downloads/downloadThemesConfig.json"
+}
+
 validate_json_file() {
   local file="$1"
   if command -v python3 >/dev/null 2>&1; then
@@ -261,8 +298,10 @@ PY
 }
 
 ensure_download_themes_config() {
-  local example="$ROOT_DIR/config/downloads/downloadThemesConfig.json.example"
-  local active="$ROOT_DIR/config/downloads/downloadThemesConfig.json"
+  local backend_config
+  backend_config="$(dsp_backend_config_dir)"
+  local example="$backend_config/downloads/downloadThemesConfig.json.example"
+  local active="$backend_config/downloads/downloadThemesConfig.json"
 
   ensure_adopter_json_config \
     "Download themes config" \
@@ -386,8 +425,10 @@ PY
 
 # Ensures mapLayersConfig.json is valid, differs from template, and has required WMS ids/colors. Used by setup.sh.
 ensure_map_layers_config() {
-  local example="$ROOT_DIR/config/map/mapLayersConfig.json.example"
-  local active="$ROOT_DIR/config/map/mapLayersConfig.json"
+  local backend_config
+  backend_config="$(dsp_backend_config_dir)"
+  local example="$backend_config/map/mapLayersConfig.json.example"
+  local active="$backend_config/map/mapLayersConfig.json"
 
   ensure_adopter_json_config \
     "Map layers config" \
@@ -1734,12 +1775,14 @@ ensure_runtime_json_file() {
 
 # Light validation for ./start.sh (exists + valid JSON; no template comparison).
 ensure_runtime_config_files_exist() {
+  local backend_config
+  backend_config="$(dsp_backend_config_dir)"
   ensure_runtime_json_file "Installation config" \
-    "$ROOT_DIR/config/installation/installation-config.json"
+    "$backend_config/installation/installation-config.json"
   ensure_runtime_json_file "Map layers config" \
-    "$ROOT_DIR/config/map/mapLayersConfig.json"
+    "$backend_config/map/mapLayersConfig.json"
   ensure_runtime_json_file "Download themes config" \
-    "$ROOT_DIR/config/downloads/downloadThemesConfig.json"
+    "$backend_config/downloads/downloadThemesConfig.json"
 }
 
 # Infrastructure container is ready (HEALTHY, RUNNING, or STARTING in compose ps).
@@ -2421,15 +2464,17 @@ prompt_real_adopter_migration_plan() {
 
 # Ensures quickstart UI/map configs (overwrites configs from another installation).
 ensure_quickstart_adopter_configs() {
-  local install_example="$ROOT_DIR/config/installation/installation-config.quickstart.json.example"
-  local install_active="$ROOT_DIR/config/installation/installation-config.json"
-  local map_example="$ROOT_DIR/config/map/mapLayersConfig.quickstart.json.example"
-  local map_active="$ROOT_DIR/config/map/mapLayersConfig.json"
-  local download_example="$ROOT_DIR/config/downloads/downloadThemesConfig.quickstart.json.example"
-  local download_active="$ROOT_DIR/config/downloads/downloadThemesConfig.json"
-  local about_example="$ROOT_DIR/config/about/about-config.quickstart.json.example"
-  local about_active="$ROOT_DIR/config/about/about-config.json"
-  local about_dir="$ROOT_DIR/config/about"
+  local backend_config
+  backend_config="$(dsp_backend_config_dir)"
+  local install_example="$backend_config/installation/installation-config.quickstart.json.example"
+  local install_active="$backend_config/installation/installation-config.json"
+  local map_example="$backend_config/map/mapLayersConfig.quickstart.json.example"
+  local map_active="$backend_config/map/mapLayersConfig.json"
+  local download_example="$backend_config/downloads/downloadThemesConfig.quickstart.json.example"
+  local download_active="$backend_config/downloads/downloadThemesConfig.json"
+  local about_example="$backend_config/about/about-config.quickstart.json.example"
+  local about_active="$backend_config/about/about-config.json"
+  local about_dir="$backend_config/about"
 
   if [ ! -f "$install_example" ]; then
     error "Quickstart installation template not found at: $install_example"
@@ -2496,17 +2541,21 @@ ensure_quickstart_adopter_configs() {
     error "About config contains invalid JSON: $about_active"
     exit 1
   fi
+
+  sync_job_config_copies
 }
 
 is_quickstart_configured() {
-  local install_example="$ROOT_DIR/config/installation/installation-config.quickstart.json.example"
-  local install_active="$ROOT_DIR/config/installation/installation-config.json"
-  local map_example="$ROOT_DIR/config/map/mapLayersConfig.quickstart.json.example"
-  local map_active="$ROOT_DIR/config/map/mapLayersConfig.json"
-  local download_example="$ROOT_DIR/config/downloads/downloadThemesConfig.quickstart.json.example"
-  local download_active="$ROOT_DIR/config/downloads/downloadThemesConfig.json"
-  local about_example="$ROOT_DIR/config/about/about-config.quickstart.json.example"
-  local about_active="$ROOT_DIR/config/about/about-config.json"
+  local backend_config
+  backend_config="$(dsp_backend_config_dir)"
+  local install_example="$backend_config/installation/installation-config.quickstart.json.example"
+  local install_active="$backend_config/installation/installation-config.json"
+  local map_example="$backend_config/map/mapLayersConfig.quickstart.json.example"
+  local map_active="$backend_config/map/mapLayersConfig.json"
+  local download_example="$backend_config/downloads/downloadThemesConfig.quickstart.json.example"
+  local download_active="$backend_config/downloads/downloadThemesConfig.json"
+  local about_example="$backend_config/about/about-config.quickstart.json.example"
+  local about_active="$backend_config/about/about-config.json"
   [ -f "$install_example" ] &&
     [ -f "$install_active" ] &&
     [ -f "$map_example" ] &&
@@ -2515,10 +2564,10 @@ is_quickstart_configured() {
     [ -f "$download_active" ] &&
     [ -f "$about_example" ] &&
     [ -f "$about_active" ] &&
-    [ -f "$ROOT_DIR/config/about/overview.md" ] &&
-    [ -f "$ROOT_DIR/config/about/features.md" ] &&
-    [ -f "$ROOT_DIR/config/about/configuration.md" ] &&
-    [ -f "$ROOT_DIR/config/about/license.md" ] &&
+    [ -f "$backend_config/about/overview.md" ] &&
+    [ -f "$backend_config/about/features.md" ] &&
+    [ -f "$backend_config/about/configuration.md" ] &&
+    [ -f "$backend_config/about/license.md" ] &&
     cmp -s "$install_active" "$install_example" &&
     cmp -s "$map_active" "$map_example" &&
     cmp -s "$download_active" "$download_example" &&

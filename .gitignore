@@ -3,15 +3,7 @@
 .env.local
 .env.*.local
 
-config/installation/installation-config.json
-config/map/mapLayersConfig.json
-config/downloads/downloadThemesConfig.json
-config/Job-Data-Migration/application/application.yaml
-config/Job-Geo-File-Generation/application/application.yaml
 config/adopter/adopter-config.yaml
-config/about/about-config.json
-config/about/*.md
-!config/about/*.md.example
 
 # IDEs
 .idea/
@@ -64,3 +56,39 @@ tests/README.md
 config/about/outros arquivos/*
 .specs/*
 tests/*docker-compose.release.yml
+/config/adopter/arquivo/adopter-config.zip
+/config/adopter/arquivo/adopter-config222.yaml
+/config/adopter/arquivo/adopter-config-.yaml
+/config/adopter/arquivo/adopter-config----12-08.yaml
+/config/adopter/adopter-config-aaa.yaml
+/config/adopter/arquivo/adopter-config-bacias-hidrograficas-pt.yaml
+/config/adopter/arquivo/adopter-config-bacias-hidrograficas-subquey-pt.yaml
+/config/adopter/arquivo/adopter-config-bkp.yaml
+/config/adopter/arquivo/adopter-config-bkp-portugal-1-pt-br.yaml
+/config/adopter/arquivo/adopter-config-bkp-portugal-2-en.yaml
+/config/adopter/arquivo/adopter-config-old-13-08-2026.yaml
+/config/adopter/arquivo/adopter-config-PORTUAL-BAO-2-PT-BR.yaml
+/config/adopter/arquivo/adopter-config-PORTUGAL-04-SET.yaml
+/config/adopter/arquivo/adopter-config-PORTUGAL-BAO.yaml
+/config/adopter/adopter-config-Portugal-BÃO-29-09-26.yaml
+/config/adopter/adopter-config-portugal-kleber-recomenda.yaml
+/config/adopter/adopter-config-portugal-pt-br.yaml
+/config/adopter/adopter-config-portugal-so-3-aeroportos.YAML
+/config/adopter/arquivo/adopter-config-PT-KELBER-ABOUT.yaml
+/config/adopter/arquivo/adopter-config-quenia.yaml
+/config/adopter/arquivo/adopter-config-quenia-ativo.yaml
+/config/adopter/arquivo/adopter-config-quenia-BAO.yaml
+/config/adopter/arquivo/adopter-config-quenia-bao-2.yaml
+/dsp-db.sql
+/dsp-geoserver-db.sql
+/config/db/gis_portugal/duplicate_to_test.sh
+/scripts/export-container-layout.sh
+/config/db/gis_portugal/export_full_dump.sh
+/config/db/gis_portugal/gis_portugal_full_dump.sql
+/config/db/gis_portugal/gis_portugal_full_dump.sql.partial
+/examples/consulta_publica/link-dump-consulta-publica.txt
+/config/adopter/portugal-adopter-config-sh-respostas.md
+/config/db/gis_portugal/README.md
+scripts/__pycache__/
+tests/__pycache__/
+/config/db/geo_public_consultation/piloto_50/vw_dsp_paises_piloto_50.sql

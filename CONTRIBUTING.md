@@ -23,13 +23,10 @@ Changes to stack orchestration belong in this repository:
 - Infrastructure under `config/` (databases, GeoServers, gateway, object storage, job images)
 
 
-`./config.sh` writes the adopter file and regenerates operational files. Do not
-edit these by hand:
-
-- `config/installation/installation-config.json`
-- `config/map/mapLayersConfig.json`
-- `config/downloads/downloadThemesConfig.json`
-- `config/Job-Data-Migration/application/application.yaml`
+`./config.sh` writes the adopter file under `config/adopter/` and regenerates
+operational files in sibling repositories (`dsp-backend/config/`,
+`dsp-job-data-migration/config/`, `dsp-job-geo-file-generation/config/`). Do not
+edit those generated JSON/YAML by hand.
 
 Change `config/adopter/adopter-config.yaml` (wizard or editor) and reapply
 `./config.sh`. The wizard does not set batch job schedules. Cron values in

@@ -42,8 +42,8 @@ else
   fi
 fi
 
-MIGRATION_CONFIG_EXAMPLE="$ROOT_DIR/config/Job-Data-Migration/application/application.yaml.example"
-MIGRATION_CONFIG="$ROOT_DIR/config/Job-Data-Migration/application/application.yaml"
+MIGRATION_CONFIG_EXAMPLE="$(dsp_migration_config_dir)/application/application.yaml.example"
+MIGRATION_CONFIG="$(dsp_migration_config_dir)/application/application.yaml"
 
 if [ "$SETUP_MODE" = "demo" ]; then
   step_header 4 "Adopter configs (quickstart UI / map layers)"

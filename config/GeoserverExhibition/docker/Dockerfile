@@ -24,8 +24,8 @@ RUN mkdir -p /opt/additional_libs /opt/geoserver_data /var/geoserver/datadir /co
 # Build context: rer-dsp-core/config
 COPY GeoserverExhibition/docker/populate_geoserver.sh /opt/populate_geoserver.sh
 COPY GeoserverExhibition/docker/docker-entrypoint.sh /docker-entrypoint.sh
-COPY docker/select-runtime-config.sh /tmp/select-runtime-config.sh
-COPY map/ /tmp/map/
+COPY --from=backend_config docker/select-runtime-config.sh /tmp/select-runtime-config.sh
+COPY --from=backend_config map/ /tmp/map/
 RUN chmod +x /opt/populate_geoserver.sh /docker-entrypoint.sh /tmp/select-runtime-config.sh && \
     /tmp/select-runtime-config.sh pick /tmp/map mapLayersConfig.json /config/mapLayersConfig.json && \
     rm -rf /tmp/map /tmp/select-runtime-config.sh && \
