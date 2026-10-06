@@ -55,8 +55,6 @@ services:
     build:
       context: ${DSP_JOB_MIGRATION_PATH:-../job-data-migration}
       dockerfile: Dockerfile
-      additional_contexts:
-        dsp_core_infra: ./config
       network: host
     container_name: dsp-job-migration
     profiles:
@@ -222,8 +220,6 @@ services:
     build:
       context: ./config
       dockerfile: GeoserverExhibition/docker/Dockerfile
-      additional_contexts:
-        backend_config: ${DSP_BACKEND_PATH:-../backend}/config
       network: host
     container_name: dsp-geoserver-exhibition
     restart: unless-stopped
@@ -272,8 +268,6 @@ services:
     build:
       context: ./config
       dockerfile: GeoserverDownload/docker/Dockerfile
-      additional_contexts:
-        backend_config: ${DSP_BACKEND_PATH:-../backend}/config
       network: host
     container_name: dsp-geoserver-download
     restart: unless-stopped

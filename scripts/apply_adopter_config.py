@@ -182,6 +182,8 @@ def component_config_paths(root: Path) -> dict[str, Path]:
         "migration_app": migration / "config/application",
         "migration_map": migration / "config/map",
         "geo_downloads": geo_file / "config/downloads",
+        "geoserver_exhibition_map": root / "config/GeoserverExhibition/map",
+        "geoserver_download_map": root / "config/GeoserverDownload/map",
     }
 
 
@@ -203,6 +205,10 @@ def sync_operational_copies(
     shutil.copy2(map_file, paths["migration_map"] / "mapLayersConfig.json")
     paths["geo_downloads"].mkdir(parents=True, exist_ok=True)
     shutil.copy2(download_file, paths["geo_downloads"] / "downloadThemesConfig.json")
+    for key in ("geoserver_exhibition_map", "geoserver_download_map"):
+        target_dir = paths[key]
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(map_file, target_dir / "mapLayersConfig.json")
 
 
 def read_dotenv_value(env_file: Path, key: str, default: str = "") -> str:
@@ -2682,7 +2688,9 @@ def wizard(example: Path, active: Path, *, edit: bool = False, root: Path | None
 
     ask_theme_kpi_configuration(config, template)
 
-    ask_about_page(config, example.parent.parent / "about")
+    if root is None:
+        raise ValueError("wizard requires --root to resolve component config paths")
+    ask_about_page(config, component_config_paths(root)["backend"] / "about")
 
     ensure_fixed_aoi_area_column(config)
     sync_aoi_area_unit_installation(config)

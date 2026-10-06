@@ -1,0 +1,236 @@
+{
+  "groups": [
+    {
+      "name": "Territorial division",
+      "key": "dt",
+      "toggle": {
+        "active": "On",
+        "inactive": "Off"
+      },
+      "layers": [
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:territory-level-1",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Brazil",
+          "activeDefault": false,
+          "active": false,
+          "key": "dt_l1",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#000000",
+            "fillColor": "transparent"
+          }
+        },
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:territory-level-2",
+          "format": "image/png",
+          "transparent": true,
+          "name": "State",
+          "activeDefault": true,
+          "active": true,
+          "key": "dt_l2",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#000000",
+            "fillColor": "transparent"
+          }
+        },
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:territory-level-3",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Municipality",
+          "activeDefault": false,
+          "active": false,
+          "key": "dt_l3",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#000000",
+            "fillColor": "transparent"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Declared rural properties",
+      "key": "ird",
+      "toggle": {
+        "active": "On",
+        "inactive": "Off"
+      },
+      "layers": [
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:area-of-interest",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Rural properties",
+          "activeDefault": true,
+          "active": true,
+          "key": "ird_aoi",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#ffff00",
+            "fillColor": "transparent"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Declared watercourses",
+      "key": "feicoes_hidrografia",
+      "toggle": {
+        "active": "On",
+        "inactive": "Off"
+      },
+      "layers": [
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:rio-ate-10",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Natural watercourse up to 10 meters",
+          "activeDefault": false,
+          "active": false,
+          "key": "feicoes_hidrografia_rio_ate_10",
+          "nativeName": "rio_ate_10",
+          "srs": "EPSG:4674",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#A0DCF1",
+            "fillColor": "#A0DCF1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Declared Permanent Preservation Area",
+      "key": "feicoes_app",
+      "toggle": {
+        "active": "On",
+        "inactive": "Off"
+      },
+      "layers": [
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:app-rio-ate-10",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Permanent Preservation Area of rivers up to 10 meters",
+          "activeDefault": false,
+          "active": false,
+          "key": "feicoes_app_app_rio_ate_10",
+          "nativeName": "app_rio_ate_10",
+          "srs": "EPSG:4674",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#ffe11e",
+            "fillColor": "#ffe11e"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Declared land cover",
+      "key": "feicoes_cobertura_solo",
+      "toggle": {
+        "active": "On",
+        "inactive": "Off"
+      },
+      "layers": [
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:area-consolidada",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Consolidated area",
+          "activeDefault": false,
+          "active": false,
+          "key": "feicoes_cobertura_solo_area_consolidada",
+          "nativeName": "area_consolidada",
+          "srs": "EPSG:4674",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#DDDDDD",
+            "fillColor": "#DDDDDD"
+          }
+        },
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:vegetacao-nativa",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Native vegetation remnant",
+          "activeDefault": false,
+          "active": false,
+          "key": "feicoes_cobertura_solo_vegetacao_nativa",
+          "nativeName": "vegetacao_nativa",
+          "srs": "EPSG:4674",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#099C3A",
+            "fillColor": "#40AE65"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Declared Legal Reserve",
+      "key": "feicoes_reserva_legal",
+      "toggle": {
+        "active": "On",
+        "inactive": "Off"
+      },
+      "layers": [
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:arl-proposta",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Proposed Legal Reserve",
+          "activeDefault": false,
+          "active": false,
+          "key": "feicoes_reserva_legal_arl_proposta",
+          "nativeName": "arl_proposta",
+          "srs": "EPSG:4674",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#0b5417",
+            "fillColor": "#97cc7e"
+          }
+        }
+      ]
+    }
+  ]
+}

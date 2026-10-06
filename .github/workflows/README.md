@@ -2,9 +2,9 @@
 
 Centralized CI for the whole DSP stack (**approach A**): `rer-dsp-core` is the build
 orchestrator. `.github/workflows/docker-build.yaml` checks out the sibling repos,
-builds every image with `docker compose build` (which resolves the
-`additional_contexts: dsp_config` used by the backend/job Dockerfiles and the
-`network:host` GeoServer builds), then retags the local `dsp-*:local` images and
+builds every image with `docker compose build` (each app image bakes config from its
+own repo or from `dsp-core/config` for GeoServers; GeoServer builds use `network:host`),
+then retags the local `dsp-*:local` images and
 pushes them to GHCR.
 
 ## Images published (ghcr.io/rural-environmental-registry/)

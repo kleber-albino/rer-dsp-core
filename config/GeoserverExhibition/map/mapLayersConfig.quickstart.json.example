@@ -1,0 +1,96 @@
+{
+  "groups": [
+    {
+      "name": "Territorial division",
+      "key": "dt",
+      "toggle": {
+        "active": "On",
+        "inactive": "Off"
+      },
+      "layers": [
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:territory-level-1",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Country",
+          "activeDefault": false,
+          "active": false,
+          "key": "dt_l1",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#9D174D",
+            "fillColor": "transparent"
+          }
+        },
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:territory-level-2",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Region",
+          "activeDefault": true,
+          "active": true,
+          "key": "dt_l2",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#701A3A",
+            "fillColor": "transparent"
+          }
+        },
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:territory-level-3",
+          "format": "image/png",
+          "transparent": true,
+          "name": "State",
+          "activeDefault": false,
+          "active": false,
+          "key": "dt_l3",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#DB2777",
+            "fillColor": "transparent"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Declared areas of interest",
+      "key": "ird",
+      "toggle": {
+        "active": "On",
+        "inactive": "Off"
+      },
+      "layers": [
+        {
+          "baseUrl": "http://localhost:8026/geoserver-exhibition/dsp/wms",
+          "layers": "dsp:area-of-interest",
+          "format": "image/png",
+          "transparent": true,
+          "name": "Demo properties",
+          "activeDefault": true,
+          "active": true,
+          "key": "ird_aoi",
+          "toggle": {
+            "active": "On",
+            "inactive": "Off"
+          },
+          "style": {
+            "color": "#cccc00",
+            "fillColor": "#ffff00"
+          }
+        }
+      ]
+    }
+  ]
+}

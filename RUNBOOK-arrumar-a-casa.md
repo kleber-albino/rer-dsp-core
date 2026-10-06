@@ -9,7 +9,7 @@
 
 ### Arquitetura de build
 - **CI centralizado no `dsp-core`** (`.github/workflows/docker-build.yaml`, "approach A"): o core faz
-  checkout dos repos irmãos, `docker compose build` (resolve `additional_contexts=dsp_config` e
+  checkout dos repos irmãos, `docker compose build` (config operacional em cada repo;
   GeoServer `network:host`), retag e push das 8 imagens ao GHCR. Irmãos **não têm CI próprio**.
 - Imagens: dsp-db, dsp-geoserver-db, dsp-backend, dsp-frontend, dsp-gateway,
   dsp-geoserver-exhibition, dsp-geoserver-download, dsp-job-migration.

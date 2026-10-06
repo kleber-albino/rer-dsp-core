@@ -108,7 +108,18 @@ dsp_geo_file_config_dir() {
   echo "$(dsp_sibling_repo_path DSP_JOB_GEO_FILE_GENERATION_PATH ../job-geo-file-generation)/config"
 }
 
-# Copies map/download JSON from backend config into job repositories (same as apply_adopter_config).
+dsp_geoserver_map_dir() {
+  case "$1" in
+    exhibition) echo "${ROOT_DIR}/config/GeoserverExhibition/map" ;;
+    download) echo "${ROOT_DIR}/config/GeoserverDownload/map" ;;
+    *)
+      error "dsp_geoserver_map_dir: use exhibition or download"
+      return 1
+      ;;
+  esac
+}
+
+# Copies map/download JSON from backend config into job and GeoServer map dirs (same as apply_adopter_config).
 sync_job_config_copies() {
   local backend_config
   backend_config="$(dsp_backend_config_dir)"
@@ -116,10 +127,14 @@ sync_job_config_copies() {
   migration_config="$(dsp_migration_config_dir)"
   local geo_config
   geo_config="$(dsp_geo_file_config_dir)"
+  local map_file="$backend_config/map/mapLayersConfig.json"
 
   mkdir -p "$migration_config/map" "$geo_config/downloads"
-  cp "$backend_config/map/mapLayersConfig.json" "$migration_config/map/mapLayersConfig.json"
+  cp "$map_file" "$migration_config/map/mapLayersConfig.json"
   cp "$backend_config/downloads/downloadThemesConfig.json" "$geo_config/downloads/downloadThemesConfig.json"
+  mkdir -p "$(dsp_geoserver_map_dir exhibition)" "$(dsp_geoserver_map_dir download)"
+  cp "$map_file" "$(dsp_geoserver_map_dir exhibition)/mapLayersConfig.json"
+  cp "$map_file" "$(dsp_geoserver_map_dir download)/mapLayersConfig.json"
 }
 
 validate_json_file() {
