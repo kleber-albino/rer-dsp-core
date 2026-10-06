@@ -3109,7 +3109,7 @@ def apply_config(root: Path, active: Path, *, quiet: bool = False) -> None:
     download_themes = build_download_themes_config(values, extra_layers)
     download_dir = paths["backend"] / "downloads"
     download_dir.mkdir(parents=True, exist_ok=True)
-    download_file = root / "config/downloads/downloadThemesConfig.json"
+    download_file = download_dir / "downloadThemesConfig.json"
     download_file.write_text(
         json.dumps(download_themes, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
