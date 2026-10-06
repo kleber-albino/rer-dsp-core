@@ -48,12 +48,23 @@ dsp_public_base_url() {
   fi
 }
 
+# Interactive input: readline on TTY (arrows, backspace). Off TTY, simple read.
+dsp_read_line() {
+  local -n out=$1
+  shift
+  if [ -t 0 ]; then
+    read -e -r -p "$*" out
+  else
+    read -r -p "$*" out
+  fi
+}
+
 prompt_yes_no() {
   local prompt="$1"
   local answer=""
 
   while true; do
-    read -r -p "${prompt} [y/n] " answer || return 1
+    dsp_read_line answer "${prompt} [y/n] " || return 1
     case "$answer" in
       y|Y)
         return 0
@@ -2218,14 +2229,14 @@ show_stack_status_menu() {
   echo "  1) Remove this project's containers, volumes and images"
   echo "  2) Exit"
   local action=""
-  read -r -p "Choice [1/2]: " action || true
+  dsp_read_line action "Choice [1/2]: " || true
   case "$action" in
     1)
       echo ""
       warn "This deletes ONLY this project's Docker resources (compose down -v --rmi all, migration profile included)."
       warn "Database data in project volumes will be lost."
       local confirm=""
-      read -r -p "Type YES to confirm cleanup: " confirm || true
+      dsp_read_line confirm "Type YES to confirm cleanup: " || true
       if [ "$confirm" != "YES" ]; then
         info "Cleanup cancelled."
         exit 0
@@ -2270,7 +2281,7 @@ prompt_setup_data_mode() {
   echo ""
   echo "How do you want to prepare data?"
   local choice=""
-  read -r -p "Choice [1/2/3]: " choice || true
+  dsp_read_line choice "Choice [1/2/3]: " || true
   case "$choice" in
     1)
       SETUP_MODE="demo"
@@ -2298,7 +2309,7 @@ prompt_schedule_hhmm() {
   local -n out_hhmm=$3
   local raw normalized
   while true; do
-    read -r -p "${prompt_label} [${default_hhmm}]: " raw || true
+    dsp_read_line raw "${prompt_label} [${default_hhmm}]: " || true
     if [ -z "$raw" ]; then
       raw="$default_hhmm"
     fi
@@ -2339,7 +2350,7 @@ prompt_recurring_schedule_cron() {
   echo "  4) Custom cron expression (5 fields)"
   echo ""
   while true; do
-    read -r -p "Choice [1]: " freq_choice || true
+    dsp_read_line freq_choice "Choice [1]: " || true
     case "${freq_choice:-1}" in
       1|2|3|4)
         break
@@ -2359,7 +2370,7 @@ prompt_recurring_schedule_cron() {
       ;;
     2)
       while true; do
-        read -r -p "Every how many hours? [6]: " step || true
+        dsp_read_line step "Every how many hours? [6]: " || true
         if [ -z "$step" ]; then
           step="6"
         fi
@@ -2377,7 +2388,7 @@ prompt_recurring_schedule_cron() {
       ;;
     3)
       while true; do
-        read -r -p "Every how many minutes? [5]: " step || true
+        dsp_read_line step "Every how many minutes? [5]: " || true
         if [ -z "$step" ]; then
           step="5"
         fi
@@ -2391,7 +2402,7 @@ prompt_recurring_schedule_cron() {
     4)
       while true; do
         local raw_cron
-        read -r -p "Cron (minute hour day month weekday, ${DSP_BATCH_JOBS_TZ}) [0 22 * * *]: " raw_cron || true
+        dsp_read_line raw_cron "Cron (minute hour day month weekday, ${DSP_BATCH_JOBS_TZ}) [0 22 * * *]: " || true
         if [ -z "$raw_cron" ]; then
           raw_cron="0 22 * * *"
         fi
@@ -2434,26 +2445,32 @@ prompt_geo_file_generation_schedule() {
 # Scheduled first run. Sets MIGRATION_SCHEDULED_AT and MIGRATION_HHMM.
 # Wall clock: DSP_BATCH_JOBS_TZ (UTC).
 prompt_migration_when() {
-  local date_ymd today
+  local date_ymd today default_hhmm now_label
+  today="$(TZ="${DSP_BATCH_JOBS_TZ}" date +%F)"
+  default_hhmm="$(TZ="${DSP_BATCH_JOBS_TZ}" date -d '+1 hour' '+%H:%M')"
+  now_label="$(TZ="${DSP_BATCH_JOBS_TZ}" date '+%Y-%m-%d %H:%M')"
   echo ""
   echo "Enter the date and time for the first migration (all times in ${DSP_BATCH_JOBS_TZ}):"
-  today="$(TZ="${DSP_BATCH_JOBS_TZ}" date +%F)"
+  echo "  Now: ${now_label} ${DSP_BATCH_JOBS_TZ} (use this clock, not your PC local time unless it is UTC)."
   while true; do
-    read -r -p "Date (YYYY-MM-DD, ${DSP_BATCH_JOBS_TZ}) [${today}]: " date_ymd || true
+    dsp_read_line date_ymd "Date (YYYY-MM-DD, ${DSP_BATCH_JOBS_TZ}) [${today}]: " || true
     if [ -z "$date_ymd" ]; then
       date_ymd="$today"
     fi
+    date_ymd="${date_ymd#"${date_ymd%%[![:space:]]*}"}"
+    date_ymd="${date_ymd%"${date_ymd##*[![:space:]]}"}"
     if ! dsp_valid_iso_date "$date_ymd"; then
       error "Invalid date: '${date_ymd}' — use YYYY-MM-DD."
       continue
     fi
-    prompt_migration_hhmm "Time (${DSP_BATCH_JOBS_TZ})" "22:00"
+    prompt_migration_hhmm "Time (${DSP_BATCH_JOBS_TZ})" "$default_hhmm"
     if dsp_datetime_is_future "$date_ymd" "$MIGRATION_HHMM" "$DSP_BATCH_JOBS_TZ"; then
       MIGRATION_SCHEDULED_AT="${date_ymd} ${MIGRATION_HHMM}:00"
       ok "Scheduled for ${MIGRATION_SCHEDULED_AT} (${DSP_BATCH_JOBS_TZ})"
       return 0
     fi
-    error "That date/time is in the past. Choose a future time."
+    now_label="$(TZ="${DSP_BATCH_JOBS_TZ}" date '+%Y-%m-%d %H:%M')"
+    error "That date/time is in the past (${date_ymd} ${MIGRATION_HHMM} ${DSP_BATCH_JOBS_TZ}). Now: ${now_label}. Choose a future time."
   done
 }
 
@@ -2478,7 +2495,7 @@ prompt_real_adopter_migration_plan() {
   echo "  2) Living source — periodic re-sync from JDBC"
   echo "  3) Deferred first load — first migration at a chosen date and time"
   echo ""
-  read -r -p "Choice [1/2/3]: " preset || true
+  dsp_read_line preset "Choice [1/2/3]: " || true
   case "$preset" in
     1|"")
       WILL_MIGRATE=true
@@ -2503,7 +2520,7 @@ prompt_real_adopter_migration_plan() {
       echo "  1) No — static data (one-time load only)"
       echo "  2) Yes — periodic re-sync"
       echo ""
-      read -r -p "Choice [1/2]: " after_choice || true
+      dsp_read_line after_choice "Choice [1/2]: " || true
       case "${after_choice:-1}" in
         1|"")
           WILL_MIGRATE=false

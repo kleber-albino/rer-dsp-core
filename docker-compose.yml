@@ -63,12 +63,10 @@ services:
     entrypoint: ["/migration-entrypoint.sh"]
     environment:
       SPRING_CONFIG_LOCATION: file:/config/application.yaml
-      SPRING_MAIN_WEB_APPLICATION_TYPE: none
       DSP_MIGRATION_EXECUTION_MODE: ${DSP_MIGRATION_EXECUTION_MODE:-once}
       DSP_MIGRATION_CRON: "${DSP_MIGRATION_CRON:-0 22 * * *}"
       DSP_MIGRATION_SCHEDULED_AT: "${DSP_MIGRATION_SCHEDULED_AT:-}"
       DSP_MIGRATION_TZ: ${DSP_MIGRATION_TZ}
-      TZ: ${DSP_MIGRATION_TZ}
       DSP_SOURCE_JDBC_URL: ${DSP_SOURCE_JDBC_URL}
       DSP_SOURCE_DB_USER: ${DSP_SOURCE_DB_USER}
       DSP_SOURCE_DB_PASSWORD: ${DSP_SOURCE_DB_PASSWORD}
@@ -83,7 +81,6 @@ services:
       DSP_GEOSERVER_DB_PASSWORD: ${DSP_GEOSERVER_DB_PASSWORD:-dsp_geo}
       MAP_LAYERS_CONFIG: /config/mapLayersConfig.json
       DSP_FIRST_DATA_LOAD_MARKER: ${DSP_FIRST_DATA_LOAD_MARKER:-/dsp-batch-markers/first_data_load.ready}
-      DSP_GEO_FILE_GENERATION_RECURRING: ${DSP_GEO_FILE_GENERATION_RECURRING:-true}
     volumes:
       - dsp_batch_markers:/dsp-batch-markers
     extra_hosts:

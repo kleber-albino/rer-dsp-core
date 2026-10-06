@@ -14,6 +14,8 @@ dsp_normalize_hhmm() {
   else
     return 1
   fi
+  hour=$((10#$hour))
+  minute=$((10#$minute))
   if [ "$hour" -gt 23 ] || [ "$minute" -gt 59 ]; then
     return 1
   fi
@@ -108,7 +110,7 @@ dsp_quote_dotenv_value() {
 dsp_datetime_is_future() {
   local date_ymd="$1"
   local hhmm="$2"
-  local tz="${3:-$DSP_MIGRATION_TZ}"
+  local tz="${3:-${DSP_BATCH_JOBS_TZ:-UTC}}"
   local target now
   target="$(TZ="$tz" date -d "${date_ymd} ${hhmm}:00" +%s)" || return 1
   now="$(TZ="$tz" date +%s)"
