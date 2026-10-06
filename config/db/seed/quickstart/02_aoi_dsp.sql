@@ -1,26 +1,6 @@
--- Quickstart seed: area_of_interest for dsp-db (demo only, SRID 4674).
+-- Quickstart seed: area_of_interest data for dsp-db (demo only, SRID 4674).
 -- 54 synthetic DEMO-* squares (2 per state); 12 overlapping pairs.
---
--- Adopter installs do not create this table in core init SQL — the migration
--- job builds it. Demonstration never runs the job, so the demo schema lives here.
--- Column updated_at matches the current backend JPA mapping.
-
-CREATE TABLE IF NOT EXISTS dsp.area_of_interest (
-    id                   VARCHAR(255) PRIMARY KEY,
-    created_at           TIMESTAMP NOT NULL,
-    updated_at           TIMESTAMP,
-    territory_level_3_id VARCHAR(64) REFERENCES dsp.territory_level_3 (id),
-    area                 NUMERIC,
-    boundary_box         geometry(Polygon),
-    centroid_coordinates geometry(Point)
-);
-
-CREATE INDEX IF NOT EXISTS idx_area_of_interest_territory_level_3_id
-    ON dsp.area_of_interest (territory_level_3_id);
-CREATE INDEX IF NOT EXISTS idx_area_of_interest_boundary_box
-    ON dsp.area_of_interest USING GIST (boundary_box);
-CREATE INDEX IF NOT EXISTS idx_area_of_interest_centroid_coordinates
-    ON dsp.area_of_interest USING GIST (centroid_coordinates);
+-- dsp.area_of_interest table comes from init SQL (01b) + apply_if_missing on start.
 
 TRUNCATE dsp.area_of_interest CASCADE;
 

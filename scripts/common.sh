@@ -857,6 +857,58 @@ wait_for_geo_file_generation_schema() {
   ok "dsp-db schema geo_file_generation ready"
 }
 
+dsp_schema_table_exists() {
+  local service="$1"
+  local user="$2"
+  local db="$3"
+  local table="$4"
+  docker compose --env-file .env exec -T "$service" \
+      psql -U "$user" -d "$db" -tAc \
+      "SELECT 1 FROM information_schema.tables WHERE table_schema = 'dsp' AND table_name = '${table}'" \
+      2>/dev/null | grep -q '^1$'
+}
+
+# Init SQL in the DB images only runs on an empty volume. Existing installs get
+# the minimal AOI table by applying the same file once (CREATE IF NOT EXISTS).
+apply_area_of_interest_schema_if_missing() {
+  local sql_dsp="$ROOT_DIR/config/db/dsp-db/01b_area_of_interest.sql"
+  local sql_geo="$ROOT_DIR/config/db/dsp-geoserver-db/01b_area_of_interest.sql"
+  local dsp_user="${DSP_DB_USER:-dsp}"
+  local dsp_db="${DSP_DB_NAME:-dsp-db}"
+  local geo_user="${DSP_GEOSERVER_DB_USER:-dsp_geo}"
+  local geo_db="${DSP_GEOSERVER_DB_NAME:-dsp-geoserver-db}"
+
+  if ! dsp_schema_table_exists dsp-db "$dsp_user" "$dsp_db" area_of_interest; then
+    info "Applying area_of_interest schema on dsp-db..."
+    if [ ! -f "$sql_dsp" ]; then
+      error "Missing ${sql_dsp}"
+      exit 1
+    fi
+    if ! docker compose --env-file .env exec -T dsp-db \
+        psql -U "$dsp_user" -d "$dsp_db" -v ON_ERROR_STOP=1 \
+        < "$sql_dsp"; then
+      error "Failed to apply area_of_interest schema on dsp-db."
+      docker compose --env-file .env logs --tail 40 dsp-db || true
+      exit 1
+    fi
+  fi
+
+  if ! dsp_schema_table_exists dsp-geoserver-db "$geo_user" "$geo_db" area_of_interest; then
+    info "Applying area_of_interest schema on dsp-geoserver-db..."
+    if [ ! -f "$sql_geo" ]; then
+      error "Missing ${sql_geo}"
+      exit 1
+    fi
+    if ! docker compose --env-file .env exec -T dsp-geoserver-db \
+        psql -U "$geo_user" -d "$geo_db" -v ON_ERROR_STOP=1 \
+        < "$sql_geo"; then
+      error "Failed to apply area_of_interest schema on dsp-geoserver-db."
+      docker compose --env-file .env logs --tail 40 dsp-geoserver-db || true
+      exit 1
+    fi
+  fi
+}
+
 validate_positive_integer() {
   local label="$1"
   local value="$2"
@@ -1765,6 +1817,8 @@ start_databases_and_wait() {
     exit 1
   fi
   ok "dsp-geoserver-db ready"
+
+  apply_area_of_interest_schema_if_missing
 
   ok "Databases are ready"
 }

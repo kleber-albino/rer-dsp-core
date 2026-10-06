@@ -8,8 +8,8 @@ Static SQL that populates `dsp-db` and `dsp-geoserver-db` without a JDBC source 
 | --- | --- |
 | `01_territory_dsp.sql` | `dsp.territory_level_*` on dsp-db (bbox + centroid) |
 | `01_territory_exhibition.sql` | same tables on exhibition-db (`geom`) |
-| `02_aoi_dsp.sql` | Creates (demo only) and loads `dsp.area_of_interest` on dsp-db (+ themes) |
-| `02_aoi_exhibition.sql` | Creates (demo only) and loads AOI on geoserver-db |
+| `02_aoi_dsp.sql` | Loads `dsp.area_of_interest` on dsp-db (+ `kpi_measure` demo) |
+| `02_aoi_exhibition.sql` | Loads AOI rows on geoserver-db (`geom`) |
 
 ## Hierarchy
 
@@ -33,7 +33,7 @@ Static SQL that populates `dsp-db` and `dsp-geoserver-db` without a JDBC source 
 
 Applied by `./setup.sh` when you choose option **1** (demonstration).
 
-Adopter installs create `dsp.area_of_interest` via the migration job, not core init SQL. These seed files therefore include the demo `CREATE TABLE` so option 1 can load AOI without JDBC. The last-update column is `updated_at`.
+Core init SQL (`01b_area_of_interest.sql` in the DB images) creates the minimal `dsp.area_of_interest` skeleton on both Postgres; `./start.sh` also applies it on older volumes if the table is missing. These seed files only insert demo rows (and `kpi_measure` on dsp-db). Adopter installs add variable columns and data via the migration job (`additional_columns`). The last-update column is `updated_at`.
 
 The quickstart `installation-config.json` uses **`map.initialView.mode: manual`** (center Brazil, zoom 4) so the home map always opens framed on the demo territory without depending on `GET /territory/boundary-box` at first load.
 
