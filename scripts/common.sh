@@ -27,6 +27,9 @@ _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=migration_schedule.sh
 source "$_COMMON_DIR/migration_schedule.sh"
 
+# IANA timezone for batch job cron and scheduled-at (setup prompts and container TZ).
+readonly DSP_BATCH_JOBS_TZ="${DSP_BATCH_JOBS_TZ:-UTC}"
+
 # Public base URL of the stack (gateway). DSP_PUBLIC_BASE_URL takes precedence; otherwise
 # build the URL from the gateway host and port, omitting port 80.
 dsp_public_base_url() {
@@ -667,7 +670,7 @@ print_migration_preview() {
   if [ "$will_run" = "true" ]; then
     first_run_label="during this setup"
   elif [ -n "${MIGRATION_SCHEDULED_AT:-}" ]; then
-    first_run_label="scheduled at ${MIGRATION_SCHEDULED_AT} (${DSP_MIGRATION_TZ})"
+    first_run_label="scheduled at ${MIGRATION_SCHEDULED_AT} (${DSP_BATCH_JOBS_TZ})"
   else
     first_run_label="not configured"
   fi
@@ -714,12 +717,12 @@ print_migration_preview() {
   echo "  First run: ${first_run_label}"
   echo "  Recurrence: ${recurrence_label}"
   if [ -n "${MIGRATION_CRON:-}" ]; then
-    echo "  Cron: ${MIGRATION_CRON} (tz=${DSP_MIGRATION_TZ})"
+    echo "  Cron: ${MIGRATION_CRON} (tz=${DSP_BATCH_JOBS_TZ})"
   fi
   if [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
     echo "  Pre-generated downloads: once, automatically after the migration job completes"
   elif [ "${GEO_FILE_GENERATION_RECURRING:-true}" = "true" ] && [ -n "${GEO_FILE_GENERATION_CRON:-}" ]; then
-    echo "  Pre-generated downloads: recurring (cron=${GEO_FILE_GENERATION_CRON})"
+    echo "  Pre-generated downloads: recurring (cron=${GEO_FILE_GENERATION_CRON}, tz=${DSP_BATCH_JOBS_TZ})"
   fi
   echo "  Datasources:"
   echo "    batch:  ${batch_url:-<missing>} (user: ${batch_user:-<missing>})"
@@ -1452,7 +1455,7 @@ persist_batch_jobs_env() {
   local geo_restart="no"
 
   set_env_var "DSP_MIGRATION_EXECUTION_MODE" "${MIGRATION_EXECUTION_MODE:-once}"
-  set_env_var "DSP_MIGRATION_TZ" "${DSP_MIGRATION_TZ}"
+  set_env_var "DSP_MIGRATION_TZ" "UTC"
   set_env_var "DSP_MIGRATION_CRON" "${MIGRATION_CRON:-}"
   set_env_var "DSP_MIGRATION_SCHEDULED_AT" "${MIGRATION_SCHEDULED_AT:-}"
   set_env_var "DSP_GEO_FILE_GENERATION_RECURRING" "$geo_recurring"
@@ -1471,6 +1474,7 @@ persist_batch_jobs_env() {
 
   set_env_var "DSP_GEO_FILE_GENERATION_EXECUTION_MODE" "$geo_mode"
   set_env_var "DSP_GEO_FILE_GENERATION_RESTART_POLICY" "$geo_restart"
+  set_env_var "DSP_GEO_FILE_GENERATION_TZ" "UTC"
   set_env_var "DSP_FIRST_DATA_LOAD_MARKER" "/dsp-batch-markers/first_data_load.ready"
   set_env_var "DSP_SETUP_DATA_MODE" "real"
 }
@@ -1715,7 +1719,7 @@ print_geo_file_generation_hints() {
   echo ""
   if is_recurring_geo_file_generation_mode; then
     echo "Pre-generated download files: bucket ${DSP_OBJECT_STORAGE_BUCKET:-dsp-geo-files}" \
-      "at ${DSP_OBJECT_STORAGE_ENDPOINT:-http://dsp-object-storage:8333} (cron=${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *})"
+      "at ${DSP_OBJECT_STORAGE_ENDPOINT:-http://dsp-object-storage:8333} (cron=${DSP_GEO_FILE_GENERATION_CRON:-0 2 * * *}, tz=${DSP_BATCH_JOBS_TZ})"
     echo "Optional extra one-shot (in addition to the schedule):"
     echo "  docker rm -f dsp-job-geo-file-generation; DSP_GEO_FILE_GENERATION_EXECUTION_MODE=once docker compose --env-file .env --profile object-storage up --build --abort-on-container-exit --exit-code-from dsp-job-geo-file-generation dsp-job-geo-file-generation"
     echo "  Logs: docker logs dsp-job-geo-file-generation"
@@ -1724,7 +1728,7 @@ print_geo_file_generation_hints() {
   if is_geo_wait_for_first_load_mode || [ "${GEO_FILE_GENERATION_WAIT:-false}" = "true" ]; then
     echo "Pre-generated download files: built once automatically after the migration job completes."
     if [ -n "${DSP_MIGRATION_SCHEDULED_AT:-}" ]; then
-      echo "  Waiting for scheduled migration at ${DSP_MIGRATION_SCHEDULED_AT} (${DSP_MIGRATION_TZ})."
+      echo "  Waiting for scheduled migration at ${DSP_MIGRATION_SCHEDULED_AT} (${DSP_BATCH_JOBS_TZ})."
     fi
     echo "  The geo file job is already running in wait-for-first-load mode."
     echo "  Optional manual one-shot:"
@@ -1744,7 +1748,7 @@ print_migration_resync_hints() {
   local mode cron tz
   mode="$(get_migration_execution_mode)"
   cron="${DSP_MIGRATION_CRON:-}"
-  tz="${DSP_MIGRATION_TZ}"
+  tz="${DSP_BATCH_JOBS_TZ}"
   echo ""
   echo "Migration execution mode: ${mode} (tz=${tz}${cron:+ cron=${cron}})"
   if [ -n "${DSP_MIGRATION_SCHEDULED_AT:-}" ]; then
@@ -2307,7 +2311,7 @@ prompt_schedule_hhmm() {
 }
 
 prompt_migration_hhmm() {
-  local prompt_label="${1:-Time}"
+  local prompt_label="${1:-Time (UTC)}"
   local default_hhmm="${2:-22:00}"
   prompt_schedule_hhmm "$prompt_label" "$default_hhmm" MIGRATION_HHMM
 }
@@ -2326,9 +2330,9 @@ prompt_recurring_schedule_cron() {
   echo "$question"
   echo ""
   if [ -n "$hhmm" ]; then
-    echo "  1) Every day at this time (${hhmm})"
+    echo "  1) Every day at this time (${hhmm} ${DSP_BATCH_JOBS_TZ})"
   else
-    echo "  1) Every day at a given time"
+    echo "  1) Every day at a given time (${DSP_BATCH_JOBS_TZ})"
   fi
   echo "  2) Every N hours"
   echo "  3) Every N minutes"
@@ -2348,7 +2352,7 @@ prompt_recurring_schedule_cron() {
   case "${freq_choice:-1}" in
     1)
       if [ -z "$hhmm" ]; then
-        prompt_schedule_hhmm "Time" "$default_daily_hhmm" picked_hhmm
+        prompt_schedule_hhmm "Time (${DSP_BATCH_JOBS_TZ})" "$default_daily_hhmm" picked_hhmm
         hhmm="$picked_hhmm"
       fi
       cron_out="$(dsp_build_daily_cron "$hhmm")"
@@ -2362,9 +2366,9 @@ prompt_recurring_schedule_cron() {
         if built="$(dsp_build_hourly_cron "$step")"; then
           cron_out="$built"
           case "$step" in
-            6) echo "  Runs at 00:00, 06:00, 12:00, and 18:00." ;;
-            24) echo "  Runs once per day at 00:00." ;;
-            *) echo "  Runs at minute 0 every ${step} hours (aligned to midnight)." ;;
+            6) echo "  Runs at 00:00, 06:00, 12:00, and 18:00 ${DSP_BATCH_JOBS_TZ}." ;;
+            24) echo "  Runs once per day at 00:00 ${DSP_BATCH_JOBS_TZ}." ;;
+            *) echo "  Runs at minute 0 every ${step} hours (aligned to midnight ${DSP_BATCH_JOBS_TZ})." ;;
           esac
           break
         fi
@@ -2387,7 +2391,7 @@ prompt_recurring_schedule_cron() {
     4)
       while true; do
         local raw_cron
-        read -r -p "Cron (minute hour day month weekday) [0 22 * * *]: " raw_cron || true
+        read -r -p "Cron (minute hour day month weekday, ${DSP_BATCH_JOBS_TZ}) [0 22 * * *]: " raw_cron || true
         if [ -z "$raw_cron" ]; then
           raw_cron="0 22 * * *"
         fi
@@ -2399,7 +2403,7 @@ prompt_recurring_schedule_cron() {
       done
       ;;
   esac
-  ok "Schedule cron: ${cron_out}"
+  ok "Schedule cron: ${cron_out} (tz=${DSP_BATCH_JOBS_TZ})"
 }
 
 # Sets MIGRATION_CRON. $1 optional HH:MM from a scheduled first run — reused for daily cron.
@@ -2428,14 +2432,14 @@ prompt_geo_file_generation_schedule() {
 }
 
 # Scheduled first run. Sets MIGRATION_SCHEDULED_AT and MIGRATION_HHMM.
-# Timezone: DSP_MIGRATION_TZ (already loaded from .env by ensure_dotenv).
+# Wall clock: DSP_BATCH_JOBS_TZ (UTC).
 prompt_migration_when() {
   local date_ymd today
   echo ""
-  echo "Enter the date and time for the first migration:"
-  today="$(TZ="${DSP_MIGRATION_TZ}" date +%F)"
+  echo "Enter the date and time for the first migration (all times in ${DSP_BATCH_JOBS_TZ}):"
+  today="$(TZ="${DSP_BATCH_JOBS_TZ}" date +%F)"
   while true; do
-    read -r -p "Date (YYYY-MM-DD) [${today}]: " date_ymd || true
+    read -r -p "Date (YYYY-MM-DD, ${DSP_BATCH_JOBS_TZ}) [${today}]: " date_ymd || true
     if [ -z "$date_ymd" ]; then
       date_ymd="$today"
     fi
@@ -2443,10 +2447,10 @@ prompt_migration_when() {
       error "Invalid date: '${date_ymd}' — use YYYY-MM-DD."
       continue
     fi
-    prompt_migration_hhmm "Time" "22:00"
-    if dsp_datetime_is_future "$date_ymd" "$MIGRATION_HHMM" "$DSP_MIGRATION_TZ"; then
+    prompt_migration_hhmm "Time (${DSP_BATCH_JOBS_TZ})" "22:00"
+    if dsp_datetime_is_future "$date_ymd" "$MIGRATION_HHMM" "$DSP_BATCH_JOBS_TZ"; then
       MIGRATION_SCHEDULED_AT="${date_ymd} ${MIGRATION_HHMM}:00"
-      ok "Scheduled for ${MIGRATION_SCHEDULED_AT} (${DSP_MIGRATION_TZ})"
+      ok "Scheduled for ${MIGRATION_SCHEDULED_AT} (${DSP_BATCH_JOBS_TZ})"
       return 0
     fi
     error "That date/time is in the past. Choose a future time."
@@ -2464,6 +2468,8 @@ prompt_real_adopter_migration_plan() {
   GEO_FILE_GENERATION_CRON=""
   GEO_FILE_GENERATION_RECURRING=true
   GEO_FILE_GENERATION_WAIT=false
+
+  info "Batch job schedules use ${DSP_BATCH_JOBS_TZ} — enter all times in ${DSP_BATCH_JOBS_TZ}."
 
   echo ""
   echo "How will your source data be updated over time?"
